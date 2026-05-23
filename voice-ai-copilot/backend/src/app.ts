@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
 import { router } from './routes/index'
+import { errorHandler } from './middleware/error-handler'
 
 export const app = express()
 
@@ -20,3 +21,6 @@ app.use('/api', router)
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' })
 })
+
+// Error handler — must be last
+app.use(errorHandler)
