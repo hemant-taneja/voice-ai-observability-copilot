@@ -7,3 +7,20 @@ export interface Agent {
   totalCalls: number
   openUseActions: number
 }
+
+export interface AgentAnalysis {
+  transcriptId: string
+  callId: string
+  analyzedAt: string
+  overallScore: number
+  passed: boolean
+  summary: string
+  useActions: Array<{ type: string; description: string; turnIndex: number }>
+}
+
+export interface AgentDetail {
+  id: string
+  ghlAgentId: string
+  name: string
+  recentAnalyses: AgentAnalysis[]
+}
