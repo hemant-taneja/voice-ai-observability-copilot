@@ -1,8 +1,8 @@
-import { Pool, PoolClient, QueryResult } from 'pg'
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg'
 import { config } from '../config'
 
 export interface Database {
-  query<T extends Record<string, unknown> = Record<string, unknown>>(
+  query<T extends QueryResultRow = QueryResultRow>(
     text: string,
     params?: unknown[]
   ): Promise<QueryResult<T>>
