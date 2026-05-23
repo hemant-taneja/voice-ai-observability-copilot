@@ -1,67 +1,187 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500&display=swap');
+/* ========================
+   Voice AI Copilot — Design System
+   ======================== */
+
+/* Google Fonts import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg-base:      #0A0B0E;
-  --bg-surface:   #111318;
-  --bg-elevated:  #181B22;
-  --bg-hover:     #1E2230;
-  --border:       #1E2230;
-  --border-bright:#2A3044;
-  --text-primary:   #F0F4FF;
-  --text-secondary: #7C8BA0;
-  --text-muted:     #3D4A5C;
-  --signal:   #F59E0B;
-  --pass:     #10B981;
-  --fail:     #F43F5E;
-  --warning:  #FB923C;
-  --info:     #818CF8;
-  --font-display: 'Syne', sans-serif;
-  --font-mono:    'IBM Plex Mono', monospace;
-  --font-ui:      'DM Sans', sans-serif;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  /* --- Color Palette --- */
+  --color-bg-primary: #0f1117;
+  --color-bg-secondary: #1a1d27;
+  --color-bg-card: #1e2130;
+  --color-bg-hover: #252840;
+
+  --color-border: #2e3348;
+  --color-border-subtle: #232638;
+
+  --color-text-primary: #e8eaf0;
+  --color-text-secondary: #9399b0;
+  --color-text-muted: #5a6080;
+
+  --color-accent-blue: #4f8ef7;
+  --color-accent-blue-dim: #1e3a6e;
+  --color-accent-green: #4ade80;
+  --color-accent-green-dim: #14532d;
+  --color-accent-amber: #fbbf24;
+  --color-accent-amber-dim: #451a03;
+  --color-accent-red: #f87171;
+  --color-accent-red-dim: #450a0a;
+  --color-accent-purple: #a78bfa;
+
+  /* --- Semantic Colors --- */
+  --color-pass: var(--color-accent-green);
+  --color-pass-bg: var(--color-accent-green-dim);
+  --color-fail: var(--color-accent-red);
+  --color-fail-bg: var(--color-accent-red-dim);
+  --color-live: #22c55e;
+  --color-live-pulse: rgba(34, 197, 94, 0.4);
+
+  /* --- Spacing Scale --- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* --- Typography --- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* --- Border Radius --- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  /* --- Transitions --- */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 350ms ease;
+
+  /* --- Layout --- */
+  --sidebar-width: 240px;
+  --header-height: 60px;
+  --content-max-width: 1280px;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* ========================
+   Global Base Styles
+   ======================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 body {
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--font-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  line-height: 1.6;
+  min-height: 100vh;
 }
 
-.mono { font-family: var(--font-mono); }
-.display { font-family: var(--font-display); }
-.text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-muted); }
+#app {
+  min-height: 100vh;
+}
 
-.surface {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+a {
+  color: var(--color-accent-blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ========================
+   Utility Classes
+   ======================== */
+
+.card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.02em;
 }
 
-.badge-pass    { background: rgba(16,185,129,0.12); color: var(--pass); }
-.badge-fail    { background: rgba(244, 63, 94,0.12); color: var(--fail); }
-.badge-signal  { background: rgba(245,158,11,0.12);  color: var(--signal); }
-.badge-info    { background: rgba(129,140,248,0.12); color: var(--info); }
+.badge--pass {
+  background: var(--color-pass-bg);
+  color: var(--color-pass);
+}
+
+.badge--fail {
+  background: var(--color-fail-bg);
+  color: var(--color-fail);
+}
+
+.badge--missed {
+  background: var(--color-accent-amber-dim);
+  color: var(--color-accent-amber);
+}
+
+.badge--deviation {
+  background: var(--color-accent-blue-dim);
+  color: var(--color-accent-blue);
+}
+
+.badge--escalation {
+  background: var(--color-accent-red-dim);
+  color: var(--color-accent-red);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
