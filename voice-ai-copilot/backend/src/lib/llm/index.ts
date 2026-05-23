@@ -14,4 +14,7 @@ export function createLLMProvider(): LLMProvider {
   }
 }
 
+// Alias used by the call-llm activity
+export const createLLMClient = createLLMProvider
+
 export type { LLMProvider }

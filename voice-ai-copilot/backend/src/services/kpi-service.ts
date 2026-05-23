@@ -8,10 +8,15 @@ interface KpiConfigRow extends Record<string, any> {
   updated_at: Date
 }
 
+export interface KpiConfig {
+  goals: KpiGoal[]
+  passThreshold: number
+}
+
 export class KpiService {
   constructor(private readonly database: Database = defaultDb) {}
 
-  async getConfig(agentId: string): Promise<{ goals: KpiGoal[]; passThreshold: number } | null> {
+  async getConfig(agentId: string): Promise<KpiConfig | null> {
     const { rows } = await this.database.query<KpiConfigRow>(
       'SELECT goals, pass_threshold FROM kpi_configs WHERE agent_id = $1',
       [agentId]
