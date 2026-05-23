@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice AI Copilot — Widget</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      background: #0f1117;
+      color: #e8eaf0;
+      min-height: 100vh;
+      padding: 16px;
+      font-size: 13px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #2e3348;
+    }
+    header h1 { font-size: 11px; letter-spacing: 0.12em; font-weight: 700; color: #9399b0; }
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+    }
+    .live-dot.connected { animation: pulse 2s ease-in-out infinite; }
+    .live-dot.disconnected { background: #5a6080; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      50%       { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
+    }
+    .agent-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid #2e3348;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      transition: background 120ms;
+    }
+    .agent-row:hover { background: #1e2130; }
+    .agent-name { flex: 1; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .score-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 100px;
+      letter-spacing: 0.04em;
+    }
+    .score-pill.pass { background: #14532d; color: #4ade80; }
+    .score-pill.fail { background: #450a0a; color: #f87171; }
+    .score-pill.none { background: #232638; color: #5a6080; }
+    .total-calls { font-size: 11px; color: #9399b0; min-width: 44px; text-align: right; }
+    .empty { color: #5a6080; text-align: center; padding: 40px 0; font-size: 12px; letter-spacing: 0.05em; }
+    .error { color: #f87171; text-align: center; padding: 20px; font-size: 12px; }
+    .flash { animation: flash 1s ease-out; }
+    @keyframes flash {
+      from { background: #1e3a6e; }
+      to   { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="live-dot disconnected" id="live-dot"></div>
+    <h1>VOICE AI COPILOT</h1>
+  </header>
+  <div id="agents-list">
+    <div class="empty">Loading...</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search)
+    const locationId = params.get('locationId') || 'dev-loc'
+    const liveDot = document.getElementById('live-dot')
+    const list = document.getElementById('agents-list')
+    let agentsData = []
+    let eventSource = null
+    let retryDelay = 1000
+
+    function setConnected(ok) {
+      liveDot.className = 'live-dot ' + (ok ? 'connected' : 'disconnected')
+    }
+
+    function renderAgents(agents) {
+      agentsData = agents
+      if (!agents.length) {
+        list.innerHTML = '<div class="empty">No agents found</div>'
+        return
+      }
+      list.innerHTML = agents.map(a => {
+        const hasRate = a.passRate !== null
+        const pct = hasRate ? Math.round(a.passRate * 100) + '%' : '—'
+        const cls = hasRate ? (a.passRate >= 0.7 ? 'pass' : 'fail') : 'none'
+        return `<div class="agent-row" id="agent-${a.id}">
+          <span class="agent-name">${escHtml(a.name)}</span>
+          <span class="total-calls">${a.totalCalls} calls</span>
+          <span class="score-pill ${cls}">${pct}</span>
+        </div>`
+      }).join('')
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    }
+
+    function flashAgent(agentId) {
+      const el = document.getElementById('agent-' + agentId)
+      if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash') }
+    }
+
+    async function fetchAgents() {
+      try {
+        const res = await fetch('/api/agents?locationId=' + encodeURIComponent(locationId))
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const data = await res.json()
+        renderAgents(data)
+      } catch (e) {
+        if (!agentsData.length) {
+          list.innerHTML = '<div class="error">Failed to load agents</div>'
+        }
+      }
+    }
+
+    function connectSSE() {
+      if (eventSource) { eventSource.close() }
+      eventSource = new EventSource('/stream?locationId=' + encodeURIComponent(locationId))
+
+      eventSource.onopen = () => {
+        setConnected(true)
+        retryDelay = 1000
+      }
+
+      eventSource.onmessage = async (e) => {
+        try {
+          const event = JSON.parse(e.data)
+          if (event.type === 'analysis_complete' || event.type === 'analysis.complete') {
+            await fetchAgents()
+            if (event.agentId) flashAgent(event.agentId)
+          }
+        } catch {}
+      }
+
+      eventSource.onerror = () => {
+        setConnected(false)
+        eventSource.close()
+        eventSource = null
+        setTimeout(connectSSE, Math.min(retryDelay, 30000))
+        retryDelay = Math.min(retryDelay * 2, 30000)
+      }
+    }
+
+    // Initial load
+    fetchAgents()
+    connectSSE()
+
+    // Poll every 30 seconds as fallback
+    setInterval(fetchAgents, 30000)
+  </script>
+</body>
+</html>
