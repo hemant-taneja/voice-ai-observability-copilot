@@ -1,5 +1,7 @@
 <template>
-  <div id="app-root">
-    <h1>Voice AI Copilot</h1>
-  </div>
+  <RouterView />
 </template>
+
+<script setup lang="ts">
+import { RouterView } from 'vue-router'
+</script>
