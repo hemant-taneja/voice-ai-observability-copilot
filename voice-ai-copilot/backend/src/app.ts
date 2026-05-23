@@ -3,7 +3,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import { router } from './routes/index'
 import { streamRouter } from './routes/stream'
-import kpiRouter from './routes/kpi'
+import { kpiRouter } from './routes/kpi'
 import { errorHandler } from './middleware/error-handler'
 
 export const app = express()

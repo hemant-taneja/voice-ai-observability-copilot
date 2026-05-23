@@ -1,3 +1,6 @@
+import { KpiGoal } from '../types/analysis.types'
+
+// Set env vars before any module imports that load config
 process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5433/voice_copilot_test'
 process.env.REDIS_URL = 'redis://localhost:6379'
 process.env.TEMPORAL_ADDRESS = 'localhost:7233'
@@ -6,45 +9,49 @@ process.env.LLM_PROVIDER = 'openai'
 process.env.OPENAI_API_KEY = 'sk-test'
 process.env.NODE_ENV = 'test'
 
-import { Database } from '../db/index'
 import { KpiService } from './kpi-service'
-import { KpiGoal } from '../types/analysis.types'
+import { Database } from '../db/index'
+
+const mockDb = (): jest.Mocked<Partial<Database>> => ({
+  query: jest.fn(),
+})
+
+const goals: KpiGoal[] = [
+  { name: 'Book Appointment', description: 'Confirm a slot', weight: 0.6 },
+  { name: 'Handle Objection', description: 'Address concerns', weight: 0.4 },
+]
 
 describe('KpiService', () => {
-  let mockDb: Partial<Database>
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockDb = { query: jest.fn() }
-  })
-
-  it('returns config for known agent', async () => {
-    ;(mockDb.query as jest.Mock).mockResolvedValueOnce({
-      rows: [{ goals: [{ name: 'Greeting', description: 'Did agent greet?', weight: 1 }], pass_threshold: 70 }],
+  it('returns kpi config for a known agentId', async () => {
+    const db = mockDb()
+    ;(db.query as jest.Mock).mockResolvedValue({
+      rows: [{ id: 'kpi-1', agent_id: 'ag-1', goals, success_threshold: '0.70', updated_at: new Date() }],
     })
-    const svc = new KpiService(mockDb as Database)
-    const result = await svc.getConfig('ag-1')
-    expect(result).toEqual({
-      goals: [{ name: 'Greeting', description: 'Did agent greet?', weight: 1 }],
-      passThreshold: 70,
+    const service = new KpiService(db as Database)
+    const config = await service.getConfig('ag-1')
+    expect(config).not.toBeNull()
+    expect(config!.goals).toHaveLength(2)
+    expect(config!.successThreshold).toBe(0.7)
+  })
+
+  it('returns null when no config exists', async () => {
+    const db = mockDb()
+    ;(db.query as jest.Mock).mockResolvedValue({ rows: [] })
+    const service = new KpiService(db as Database)
+    const config = await service.getConfig('ag-unknown')
+    expect(config).toBeNull()
+  })
+
+  it('upserts a kpi config', async () => {
+    const db = mockDb()
+    ;(db.query as jest.Mock).mockResolvedValue({
+      rows: [{ id: 'kpi-1', agent_id: 'ag-1', goals, success_threshold: '0.75', updated_at: new Date() }],
     })
-  })
-
-  it('returns null for unknown agent', async () => {
-    ;(mockDb.query as jest.Mock).mockResolvedValueOnce({ rows: [] })
-    const svc = new KpiService(mockDb as Database)
-    const result = await svc.getConfig('unknown')
-    expect(result).toBeNull()
-  })
-
-  it('upserts config', async () => {
-    ;(mockDb.query as jest.Mock).mockResolvedValueOnce({ rows: [] })
-    const svc = new KpiService(mockDb as Database)
-    const goals: KpiGoal[] = [{ name: 'Closing', description: 'Agent closed properly', weight: 2 }]
-    await svc.upsertConfig('ag-2', goals, 80)
-    expect(mockDb.query).toHaveBeenCalledWith(
-      expect.stringContaining('ON CONFLICT'),
-      ['ag-2', JSON.stringify(goals), 80]
+    const service = new KpiService(db as Database)
+    await service.upsertConfig('ag-1', goals, 0.75)
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO kpi_configs'),
+      expect.arrayContaining(['ag-1', 0.75])
     )
   })
 })

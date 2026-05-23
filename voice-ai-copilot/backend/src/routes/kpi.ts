@@ -1,33 +1,28 @@
-import { Router } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
+import { ghlAuth } from '../middleware/ghl-auth'
 import { KpiService } from '../services/kpi-service'
 import { AppError } from '../middleware/error-handler'
 
-const router = Router()
+export const kpiRouter = Router()
 const kpiService = new KpiService()
 
 // GET /api/kpi/:agentId
-router.get('/:agentId', async (req, res, next) => {
+kpiRouter.get('/:agentId', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const config = await kpiService.getConfig(req.params.agentId)
-    if (!config) throw new AppError('KPI config not found', 404, 'NOT_FOUND')
+    if (!config) throw new AppError('KPI config not found', 404, 'KPI_NOT_FOUND')
     res.json(config)
-  } catch (err) {
-    next(err)
-  }
+  } catch (err) { next(err) }
 })
 
 // PUT /api/kpi/:agentId
-router.put('/:agentId', async (req, res, next) => {
+kpiRouter.put('/:agentId', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { goals, passThreshold } = req.body
-    if (!Array.isArray(goals) || typeof passThreshold !== 'number') {
-      throw new AppError('Invalid request body', 400, 'VALIDATION_ERROR')
+    const { goals, successThreshold } = req.body
+    if (!Array.isArray(goals) || typeof successThreshold !== 'number') {
+      throw new AppError('Invalid request body', 400, 'INVALID_BODY')
     }
-    await kpiService.upsertConfig(req.params.agentId, goals, passThreshold)
-    res.json({ ok: true })
-  } catch (err) {
-    next(err)
-  }
+    const config = await kpiService.upsertConfig(req.params.agentId, goals, successThreshold)
+    res.json(config)
+  } catch (err) { next(err) }
 })
-
-export default router
