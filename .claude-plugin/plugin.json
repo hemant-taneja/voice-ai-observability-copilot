@@ -1,0 +1,9 @@
+{
+  "name": "ghl-copilot",
+  "description": "Voice AI Observability Copilot — project-scoped skills for the HighLevel FSB assignment",
+  "version": "1.0.0",
+  "author": {
+    "name": "HighLevel FSB"
+  },
+  "keywords": ["highlevel", "voice-ai", "observability", "copilot", "ghl", "node", "vue"]
+}
