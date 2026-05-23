@@ -4,7 +4,8 @@ import { GHLAgent } from '../types/ghl.types'
 
 const GHL_BASE = 'https://services.leadconnectorhq.com'
 
-interface TokenRow extends Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface TokenRow extends Record<string, any> {
   access_token: string
   refresh_token: string
   token_expires_at: Date | null
