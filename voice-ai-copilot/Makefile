@@ -13,8 +13,8 @@ migrate:
 	cd backend && npm run migrate
 
 # Seed demo data
-seed:
-	cd backend && npm run seed
+seed: ## Insert sample data
+	cd backend && npx ts-node src/scripts/seed.ts
 
 # Start both backend and frontend in dev mode
 dev:

@@ -1,85 +1,126 @@
 # Voice AI Observability Copilot
 
-An Agent Observability Copilot that automates the Monitor and Analyze phases for HighLevel Voice AI agents.
+Real-time KPI dashboard and call analysis engine for GoHighLevel AI voice agents.
+
+## What It Does
+
+- **Ingests** GHL webhook events when AI voice calls complete
+- **Analyzes** transcripts with GPT-4o or Claude Haiku via Temporal durable workflows
+- **Streams** results to a Vue 3 dashboard over SSE
+- **Embeds** a compact widget in the GHL marketplace iframe
 
 ## Architecture
 
 ```
-GHL Webhook → Express handler (HMAC verified) → Temporal workflow
-  → Load transcript + KPI config
-  → Build LLM prompt
-  → Call LLM (OpenAI or Anthropic, retried on rate limit)
-  → Persist analysis results + use actions
-  → SSE broadcast → Vue dashboard updates live
+GHL Webhook → Express (HMAC verified) → TranscriptService
+                                         ↓
+                              Temporal: analyzeCallWorkflow
+                                   ↓              ↓
+                             GPT-4o/Haiku    PostgreSQL
+                                         ↓
+                              SSE broadcast → Vue 3 Dashboard
 ```
-
-**Stack:** Node.js + TypeScript, Express, Temporal, PostgreSQL, Redis, Vue 3 + Pinia, TailwindCSS
-
-## What Is Real vs Mocked
-
-| Feature | Status |
-|---|---|
-| GHL webhook handler | Real — HMAC-SHA256 verified, idempotent |
-| Transcript ingestion | Real |
-| LLM analysis pipeline | Real — OpenAI or Anthropic via env var |
-| SSE live updates | Real |
-| Seed data | Mocked — 3 agents, 60 transcripts |
-| GHL OAuth flow | Architecture-ready — upgrade path below |
-
-## Prerequisites
-
-- Docker Desktop
-- Node.js 20+
 
 ## Quick Start
 
+### Prerequisites
+- Node.js 20+
+- Docker Desktop
+- ngrok (for GHL webhook tunnel)
+
+### 1. Start infrastructure
+
 ```bash
-# 1. Clone and install
-git clone https://github.com/hemant-taneja/voice-ai-observability-copilot
 cd voice-ai-copilot
-cp .env.example .env
-# Fill in OPENAI_API_KEY (or ANTHROPIC_API_KEY) and GHL_WEBHOOK_SECRET
-
-# 2. Start infrastructure
 make infra
-
-# 3. Run migrations + seed demo data
-make migrate
-make seed
-
-# 4. Start backend + frontend
-make dev
-
-# 5. Open dashboard
-# http://localhost:5173?locationId=demo-location-001
-# Temporal UI: http://localhost:8080
 ```
 
-## GHL Integration
+Starts: Postgres (5432), Postgres test (5433), Redis (6379), Temporal (7233), Temporal UI (8080)
 
-**Custom JS Widget (demo mode):**
-Paste `widget/inject.js` into GHL Settings → Custom JS. Update the iframe src to your deployed URL.
+### 2. Configure environment
 
-**Marketplace App (upgrade path):**
-1. Register app at developers.gohighlevel.com
-2. Add OAuth callback to `POST /auth/callback` — stores tokens in `locations` table
-3. In `ghl-auth.ts`, replace query-param `locationId` with signed GHL iframe header
+```bash
+cp .env.example .env
+# Fill in GHL_CLIENT_ID, GHL_CLIENT_SECRET, GHL_WEBHOOK_SECRET
+# Set LLM_PROVIDER=openai and OPENAI_API_KEY=sk-...
+```
 
-## Architecture Notes — Approach 3 Upgrade
+### 3. Run migrations + seed
 
-The current pipeline is a linear Temporal workflow. To upgrade to an explicit event-driven pipeline:
+```bash
+make migrate
+make seed
+```
 
-- Split `analyze-call.workflow.ts` into three chained workflows: `IngestWorkflow → AnalysisWorkflow → RecommendationWorkflow`
-- Each workflow is independently retryable and visible in the Temporal UI
-- No changes required to routes, services, or frontend
+### 4. Start dev servers
 
-This upgrade touches only `src/workflows/` — the rest of the system is unchanged.
+```bash
+make dev
+```
 
-## Team of One
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3000
+- Temporal UI: http://localhost:8080
 
-Designed and implemented as a Team of One owning Product, Design, Engineering, and QA:
+### 5. Expose webhook to GHL
 
-- **Product:** Assignment requirements mapped to Monitor + Analyze loops with a clear real vs mocked distinction
-- **Design:** Dark Signal aesthetic — deliberate, distinctive, not generic AI tooling
-- **Engineering:** Temporal for durable LLM workflows, provider-agnostic LLM adapter, HMAC-verified webhooks
-- **QA:** Unit + integration + workflow tests, seeded demo data for consistent demo experience
+```bash
+make ngrok
+# Copy the HTTPS URL → GHL Settings → Custom Webhook
+```
+
+## Testing
+
+```bash
+make test
+```
+
+Backend: 40+ Jest tests
+Frontend: 16+ Vitest tests
+
+## API Reference
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | /webhooks/call-completed | HMAC | Ingest call transcript |
+| GET | /api/agents | locationId | List agents with metrics |
+| GET | /api/agents/:id | locationId | Agent detail + analyses |
+| GET | /api/kpi/:agentId | locationId | Get KPI config |
+| PUT | /api/kpi/:agentId | locationId | Upsert KPI config |
+| GET | /stream | locationId | SSE real-time stream |
+
+## KPI Configuration
+
+Define goals per agent via `PUT /api/kpi/:agentId`:
+
+```json
+{
+  "goals": [
+    { "name": "Book Appointment", "description": "Confirm a specific slot", "weight": 0.6 },
+    { "name": "Handle Objection", "description": "Address concerns professionally", "weight": 0.4 }
+  ],
+  "successThreshold": 0.70
+}
+```
+
+## GHL Widget
+
+Embed the compact widget in the GHL marketplace:
+
+```
+https://your-app.com/widget.html?locationId={location_id}
+```
+
+Shows real-time agent performance with live SSE updates.
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Backend | Node.js + Express + TypeScript |
+| Workflow | Temporal (durable, retries, backoff) |
+| LLM | OpenAI GPT-4o / Anthropic Claude Haiku |
+| Database | PostgreSQL 16 (via pg Pool) |
+| Frontend | Vue 3 + Vite + Pinia + TypeScript |
+| Auth | GHL OAuth 2.0 + HMAC webhook signatures |
+| Realtime | Server-Sent Events (SSE) |
