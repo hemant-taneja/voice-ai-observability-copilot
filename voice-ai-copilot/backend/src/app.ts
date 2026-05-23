@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
 import { router } from './routes/index'
+import { streamRouter } from './routes/stream'
 import { errorHandler } from './middleware/error-handler'
 
 export const app = express()
@@ -16,6 +17,7 @@ app.get('/health', (_req: Request, res: Response) => {
 })
 
 app.use('/api', router)
+app.use('/stream', streamRouter)
 
 // 404 — after all routes
 app.use((_req: Request, res: Response) => {
