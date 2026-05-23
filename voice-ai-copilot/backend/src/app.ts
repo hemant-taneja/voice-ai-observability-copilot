@@ -5,6 +5,7 @@ import { router } from './routes/index'
 import { streamRouter } from './routes/stream'
 import { kpiRouter } from './routes/kpi'
 import { webhookRouter } from './routes/webhooks'
+import { agentsRouter } from './routes/agents'
 import { errorHandler } from './middleware/error-handler'
 
 export const app = express()
@@ -25,6 +26,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/api', router)
 app.use('/stream', streamRouter)
 app.use('/api/kpi', kpiRouter)
+app.use('/api/agents', agentsRouter)
 
 // 404 — after all routes
 app.use((_req: Request, res: Response) => {
