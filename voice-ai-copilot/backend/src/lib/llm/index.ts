@@ -9,6 +9,13 @@ export function createLLMProvider(): LLMProvider {
       return new OpenAIProvider()
     case 'anthropic':
       return new AnthropicProvider()
+    case 'groq':
+      return new OpenAIProvider({
+        apiKey: process.env.GROQ_API_KEY,
+        baseURL: 'https://api.groq.com/openai/v1',
+        model: 'llama-3.3-70b-versatile',
+        providerName: 'groq',
+      })
     default:
       throw new Error(`Unknown LLM provider: ${config.llmProvider}`)
   }

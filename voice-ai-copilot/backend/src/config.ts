@@ -15,9 +15,10 @@ const schema = z.object({
   ghlClientId: z.string().optional(),
   ghlClientSecret: z.string().optional(),
   ghlWebhookSecret: z.string().min(1, 'GHL_WEBHOOK_SECRET is required'),
-  llmProvider: z.enum(['openai', 'anthropic']),
+  llmProvider: z.enum(['openai', 'anthropic', 'groq']),
   openaiApiKey: z.string().optional(),
   anthropicApiKey: z.string().optional(),
+  groqApiKey: z.string().optional(),
   port: z.coerce.number().default(3000),
   nodeEnv: z.enum(['development', 'test', 'production']).default('development'),
 })
@@ -33,6 +34,7 @@ const result = schema.safeParse({
   llmProvider: process.env.LLM_PROVIDER,
   openaiApiKey: process.env.OPENAI_API_KEY,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  groqApiKey: process.env.GROQ_API_KEY,
   port: process.env.PORT,
   nodeEnv: process.env.NODE_ENV,
 })

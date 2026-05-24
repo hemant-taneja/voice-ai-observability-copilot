@@ -49,14 +49,26 @@ function buildUserPrompt(prompt: AnalysisPrompt): string {
   return `Transcript:\n${turns}`
 }
 
+interface OpenAIProviderOptions {
+  apiKey?: string
+  baseURL?: string
+  model?: string
+  providerName?: string
+}
+
 export class OpenAIProvider implements LLMProvider {
-  readonly providerName = 'openai'
-  readonly modelName = 'gpt-4o'
+  readonly providerName: string
+  readonly modelName: string
 
   private client: OpenAI
 
-  constructor() {
-    this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  constructor(options: OpenAIProviderOptions = {}) {
+    this.providerName = options.providerName ?? 'openai'
+    this.modelName = options.model ?? 'gpt-4o'
+    this.client = new OpenAI({
+      apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+      baseURL: options.baseURL,
+    })
   }
 
   async analyze(prompt: AnalysisPrompt): Promise<AnalysisOutput> {

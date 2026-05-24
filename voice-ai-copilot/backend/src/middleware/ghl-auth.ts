@@ -22,6 +22,7 @@ export function ghlAuth(): RequestHandler {
       return
     }
 
+    ;(req as any).locationId = locationId
     next()
   }
 }
