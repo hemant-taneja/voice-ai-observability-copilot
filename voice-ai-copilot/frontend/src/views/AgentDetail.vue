@@ -88,7 +88,7 @@
 
             <!-- Inline diff panel -->
             <ScriptDiffPanel
-              v-if="diffPanelOpen && agent?.script != null"
+              v-if="diffPanelOpen"
               :currentScript="localScript"
               :suggestions="allSuggestions"
               @save="handleDiffSave"

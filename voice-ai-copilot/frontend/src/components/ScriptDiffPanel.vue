@@ -7,11 +7,8 @@
       </div>
       <div class="diff-actions">
         <button class="dismiss-btn" @click="$emit('dismiss')">Dismiss</button>
-        <button class="save-btn" :disabled="saving" @click="handleSave">
-          <svg v-if="saving" width="11" height="11" viewBox="0 0 12 12" fill="none" class="spin">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14" stroke-dashoffset="4"/>
-          </svg>
-          {{ saving ? 'Saving…' : 'Save to Script' }}
+        <button class="save-btn" @click="handleSave">
+          Save to Script
         </button>
       </div>
     </div>
@@ -39,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { diffLines } from 'diff'
 import type { ScriptSuggestion } from '../types/analysis.types'
 
@@ -52,8 +49,6 @@ const emit = defineEmits<{
   save: [newScript: string]
   dismiss: []
 }>()
-
-const saving = ref(false)
 
 // Apply all suggestions to produce the merged script
 const suggestedScript = computed((): string => {
@@ -84,13 +79,8 @@ const diffChunks = computed(() => {
     })
 })
 
-async function handleSave() {
-  saving.value = true
-  try {
-    emit('save', suggestedScript.value)
-  } finally {
-    saving.value = false
-  }
+function handleSave() {
+  emit('save', suggestedScript.value)
 }
 </script>
 
