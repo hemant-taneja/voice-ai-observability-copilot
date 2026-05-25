@@ -48,6 +48,7 @@ describe('analyzeCallWorkflow', () => {
       persistResults: jest.fn().mockResolvedValue('ar-1'),
       broadcastSSE: jest.fn().mockResolvedValue(undefined),
       broadcastSSEFailure: jest.fn().mockResolvedValue(undefined),
+      markTranscriptFailed: jest.fn().mockResolvedValue(undefined),
     }
 
     const worker = await Worker.create({
