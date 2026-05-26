@@ -36,13 +36,15 @@ const { connected } = useSSE(locationId, (event) => {
   streamStore.setLastEvent(event)
 
   if (event.type === 'analysis.complete' && event.agentId) {
-    agentsStore.fetchAll(locationId)
-    analysisStore.fetchResults(event.agentId, locationId)
+    await agentsStore.fetchAll(locationId)
+    const agent = agentsStore.agents.find(a => a.ghlAgentId === event.agentId)
+    if (agent) analysisStore.fetchResults(agent.id, locationId)
     addToast('Analysis complete', 'success')
   }
 
   if (event.type === 'analysis.failed' && event.agentId) {
-    analysisStore.fetchResults(event.agentId, locationId)
+    const agent = agentsStore.agents.find(a => a.ghlAgentId === event.agentId)
+    if (agent) analysisStore.fetchResults(agent.id, locationId)
     addToast('Analysis failed — transcript marked for retry', 'error')
   }
 })
