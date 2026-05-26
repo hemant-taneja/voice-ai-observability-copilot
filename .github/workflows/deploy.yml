@@ -49,36 +49,8 @@ jobs:
     name: Deploy
     needs: test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: voice-ai-copilot
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: voice-ai-copilot/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build -w frontend
-        env:
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-
-      - name: Deploy frontend to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-          channelId: live
-          entryPoint: voice-ai-copilot/frontend
-
-      - name: Deploy backend to GCE VM
+      - name: Deploy to GCE VM
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.GCE_VM_IP }}
@@ -86,8 +58,11 @@ jobs:
           key: ${{ secrets.GCE_SSH_PRIVATE_KEY }}
           script: |
             set -e
-            cd /opt/voice-ai-copilot
+            cd ~/voice-ai-observability-copilot
             git pull origin main
+            cd voice-ai-copilot
+            npm ci
+            VITE_API_BASE_URL="" npm run build -w frontend
             docker compose build
             docker compose up -d
             echo "Waiting for services to be healthy..."
