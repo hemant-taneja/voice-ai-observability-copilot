@@ -24,7 +24,7 @@ services:
     image: temporalio/auto-setup:1.25.0
     restart: unless-stopped
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: postgres
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
@@ -70,6 +70,7 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

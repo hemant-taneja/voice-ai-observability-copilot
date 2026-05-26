@@ -1,3 +1,27 @@
-{env.DUCKDNS_DOMAIN} {
-    reverse_proxy app:3000
+{$DUCKDNS_DOMAIN} {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy app:3000
+    }
+
+    handle /stream/* {
+        reverse_proxy app:3000 {
+            flush_interval -1
+        }
+    }
+
+    handle /webhooks/* {
+        reverse_proxy app:3000
+    }
+
+    handle /health {
+        reverse_proxy app:3000
+    }
+
+    handle {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
 }
