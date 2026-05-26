@@ -28,6 +28,22 @@ export class KpiService {
     }
   }
 
+  async getConfigById(id: string): Promise<KpiConfig | null> {
+    const { rows } = await this.database.query(
+      'SELECT id, agent_id, goals, success_threshold, updated_at FROM kpi_configs WHERE id = $1',
+      [id]
+    )
+    if (!rows[0]) return null
+    const row = rows[0]
+    return {
+      id: row.id,
+      agentId: row.agent_id,
+      goals: row.goals as KpiGoal[],
+      successThreshold: parseFloat(row.success_threshold),
+      updatedAt: row.updated_at,
+    }
+  }
+
   async upsertConfig(agentId: string, goals: KpiGoal[], successThreshold: number): Promise<KpiConfig> {
     const { rows } = await this.database.query(
       `INSERT INTO kpi_configs (agent_id, goals, success_threshold)
