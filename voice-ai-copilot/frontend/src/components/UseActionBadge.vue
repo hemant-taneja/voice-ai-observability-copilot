@@ -66,13 +66,17 @@
 
 <script setup lang="ts">
 import { computed, ref, nextTick, onMounted } from 'vue'
+import { useReviewStore } from '../stores/review'
 
 const props = defineProps<{
   type: 'missed_opportunity' | 'deviation' | 'escalation_needed'
   description: string
   turnIndex?: number | null
   actionId?: string | null
+  agentId?: string | null
 }>()
+
+const reviewStore = useReviewStore()
 
 // ── localStorage keys ──────────────────────────────────────
 // escalation_needed uses a separate key so AgentDetail can query it independently
@@ -99,7 +103,9 @@ onMounted(() => {
 // ── Actions ────────────────────────────────────────────────
 function toggleReviewed() {
   reviewed.value = !reviewed.value
-  if (keyReviewed.value) localStorage.setItem(keyReviewed.value, String(reviewed.value))
+  if (keyReviewed.value) {
+    reviewStore.setReviewed(keyReviewed.value, reviewed.value, props.agentId ?? undefined)
+  }
 }
 
 async function openNote() {

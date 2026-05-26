@@ -16,6 +16,7 @@ import ToastContainer from './components/ToastContainer.vue'
 import { useStreamStore } from './stores/stream'
 import { useAgentsStore } from './stores/agents'
 import { useAnalysisStore } from './stores/analysis'
+import { useReviewStore } from './stores/review'
 import { useSSE } from './composables/useSSE'
 import { useToast } from './composables/useToast'
 
@@ -24,7 +25,11 @@ const locationId = new URLSearchParams(window.location.search).get('locationId')
 const streamStore  = useStreamStore()
 const agentsStore  = useAgentsStore()
 const analysisStore = useAnalysisStore()
+const reviewStore  = useReviewStore()
 const { add: addToast } = useToast()
+
+// Hydrate reviewed state from localStorage once on app start
+reviewStore.hydrate()
 
 const { connected } = useSSE(locationId, (event) => {
   streamStore.setConnected(true)

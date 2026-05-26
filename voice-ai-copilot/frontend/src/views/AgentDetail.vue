@@ -169,13 +169,14 @@
               <td class="col-date mono">{{ formatDate(tc.ingestedAt) }}</td>
               <td class="col-duration mono">{{ formatDuration(tc.durationSeconds) }}</td>
               <td class="col-actions">
+                <template v-for="(count, type) in useActionCounts(latestAnalysis(tc)?.useActions ?? []).unreviewed" :key="type">
+                  <span class="ua-pill" :class="type">{{ count }} {{ typeShort(type) }}</span>
+                </template>
                 <span
-                  v-for="(count, type) in useActionCounts(latestAnalysis(tc)?.useActions ?? [])"
-                  :key="type"
-                  class="ua-pill"
-                  :class="type"
+                  v-if="useActionCounts(latestAnalysis(tc)?.useActions ?? []).reviewedCount > 0"
+                  class="ua-pill reviewed"
                 >
-                  {{ count }} {{ typeShort(type) }}
+                  {{ useActionCounts(latestAnalysis(tc)?.useActions ?? []).reviewedCount }} reviewed
                 </span>
               </td>
               <td class="col-chevron">
@@ -262,6 +263,7 @@
                       :description="ua.description"
                       :turnIndex="ua.transcriptTurnIndex"
                       :actionId="ua.id"
+                      :agentId="id"
                     />
                   </div>
                 </div>
@@ -304,6 +306,7 @@ import { agentsApi } from '../api/agents'
 import { analysisApi } from '../api/analysis'
 import { kpiApi } from '../api/kpi'
 import { useStreamStore } from '../stores/stream'
+import { useReviewStore } from '../stores/review'
 import type { AgentDetail } from '../types/agent.types'
 import type { KpiConfig, KpiGoal, KpiScore, TranscriptCard, AnalysisVersion, UseAction, ScriptSuggestion } from '../types/analysis.types'
 import UseActionBadge from '../components/UseActionBadge.vue'
@@ -533,10 +536,22 @@ function dismissEscalationBanner() {
   sessionStorage.setItem(`escalation-banner-dismissed-${id}`, '1')
 }
 
-function useActionCounts(actions: UseAction[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const ua of actions) counts[ua.type] = (counts[ua.type] ?? 0) + 1
-  return counts
+const reviewStore = useReviewStore()
+
+function useActionCounts(actions: UseAction[]): { unreviewed: Record<string, number>; reviewedCount: number } {
+  const unreviewed: Record<string, number> = {}
+  let reviewedCount = 0
+  for (const ua of actions) {
+    const storageKey = ua.id
+      ? (ua.type === 'escalation_needed' ? `ua-escalation-handled-${ua.id}` : `ua-reviewed-${ua.id}`)
+      : null
+    if (storageKey && reviewStore.isReviewed(storageKey)) {
+      reviewedCount++
+    } else {
+      unreviewed[ua.type] = (unreviewed[ua.type] ?? 0) + 1
+    }
+  }
+  return { unreviewed, reviewedCount }
 }
 
 function typeShort(type: string): string {
@@ -933,6 +948,7 @@ function formatDuration(seconds: number | null | undefined): string {
 .ua-pill.missed_opportunity { background: rgba(245,158,11,0.12); color: var(--warn); }
 .ua-pill.deviation          { background: rgba(79,136,255,0.1);  color: var(--accent); }
 .ua-pill.escalation_needed  { background: rgba(255,65,105,0.1);  color: var(--fail); }
+.ua-pill.reviewed           { background: var(--bg-hover);        color: var(--text-muted); }
 
 /* ── Right drawer ────────────────────────────────────────── */
 .drawer-overlay {
