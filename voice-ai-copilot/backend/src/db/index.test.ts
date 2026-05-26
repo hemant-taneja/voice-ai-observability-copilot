@@ -2,7 +2,7 @@
 // Requires postgres_test running on port 5433
 import { Pool } from 'pg'
 
-const TEST_URL = 'postgresql://postgres:postgres@localhost:5433/voice_copilot_test'
+const TEST_URL = 'postgresql://postgres:postgres@127.0.0.1:5433/voice_copilot_test'
 
 describe('db pool', () => {
   beforeAll(() => {

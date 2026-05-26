@@ -17,7 +17,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Compiled JS
+# Install pm2 globally (pinned major, cached before code artifacts)
+RUN npm install -g pm2@5
+
+# Compiled JS from builder
 COPY --from=builder /app/dist ./dist
 
 # SQL migration files — tsc does not copy .sql, so copy manually
@@ -26,7 +29,9 @@ COPY src/db/migrations ./dist/db/migrations
 # pm2 config
 COPY ecosystem.config.js ./
 
-RUN npm install -g pm2
+# Run as unprivileged user
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 3000
 CMD ["pm2-runtime", "ecosystem.config.js"]
