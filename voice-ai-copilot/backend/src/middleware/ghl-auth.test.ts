@@ -20,6 +20,8 @@ describe('ghlAuth middleware', () => {
   beforeAll(async () => {
     setTestEnv()
     jest.resetModules()
+    const { runMigrations } = await import('../db/migrate')
+    await runMigrations(TEST_URL)
     pool = new Pool({ connectionString: TEST_URL })
     // Seed a test location
     await pool.query(
