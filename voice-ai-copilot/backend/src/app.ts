@@ -7,6 +7,7 @@ import { kpiRouter } from './routes/kpi'
 import { webhookRouter } from './routes/webhooks'
 import { agentsRouter } from './routes/agents'
 import { errorHandler } from './middleware/error-handler'
+import { sseManager, SSEEvent } from './lib/sse-manager'
 
 export const app = express()
 
@@ -27,6 +28,19 @@ app.use('/api', router)
 app.use('/stream', streamRouter)
 app.use('/api/kpi', kpiRouter)
 app.use('/api/agents', agentsRouter)
+
+// Internal-only SSE broadcast — called by the Temporal worker process via HTTP
+// since it runs in a separate process and cannot share the in-memory sseManager.
+app.post('/internal/broadcast', (req: Request, res: Response) => {
+  const remote = req.socket.remoteAddress
+  if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const { locationId, type, agentId } = req.body as { locationId: string; type: SSEEvent['type']; agentId: string }
+  sseManager.broadcast(locationId, { type, agentId })
+  res.json({ ok: true })
+})
 
 // 404 — after all routes
 app.use((_req: Request, res: Response) => {
