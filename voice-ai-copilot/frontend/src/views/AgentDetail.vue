@@ -92,7 +92,7 @@
               :currentScript="localScript"
               :suggestions="allSuggestions"
               @save="handleDiffSave"
-              @dismiss="diffPanelOpen = false"
+              @dismiss="handleDiffDismiss"
             />
 
             <div class="script-footer">
@@ -356,6 +356,9 @@ const reanalyzeDone = ref<Set<string>>(new Set())
 // Script diff panel state
 const diffPanelOpen = ref(false)
 
+// Suggestions hidden after dismiss or save (keyed by sectionTitle::issue, persisted per agent)
+const hiddenSuggestionKeys = ref<Set<string>>(new Set())
+
 // Escalation banner state
 const bannerDismissed = ref(false)
 
@@ -379,6 +382,8 @@ onMounted(async () => {
   } finally {
     loading.value = false
     bannerDismissed.value = sessionStorage.getItem(`escalation-banner-dismissed-${id}`) === '1'
+    const storedHidden = localStorage.getItem(`sg-hidden-${id}`)
+    if (storedHidden) hiddenSuggestionKeys.value = new Set(JSON.parse(storedHidden))
   }
 })
 
@@ -398,7 +403,8 @@ const agentHealth = computed(() => {
   return agent.value.passRate >= 0.7 ? 'pass' : 'fail'
 })
 
-// Collect all unique script suggestions from the latest analysis of each transcript card
+// Collect all unique script suggestions from the latest analysis of each transcript card,
+// excluding any that were previously dismissed or applied (persisted in localStorage)
 const allSuggestions = computed((): ScriptSuggestion[] => {
   const seen = new Set<string>()
   const result: ScriptSuggestion[] = []
@@ -407,7 +413,7 @@ const allSuggestions = computed((): ScriptSuggestion[] => {
     if (!latest) continue
     for (const s of latest.scriptSuggestions ?? []) {
       const key = `${s.sectionTitle}::${s.issue}`
-      if (!seen.has(key)) {
+      if (!seen.has(key) && !hiddenSuggestionKeys.value.has(key)) {
         seen.add(key)
         result.push(s)
       }
@@ -486,6 +492,13 @@ async function reanalyze(transcriptId: string) {
   }
 }
 
+function persistHiddenSuggestions(suggestions: ScriptSuggestion[]) {
+  const updated = new Set(hiddenSuggestionKeys.value)
+  for (const s of suggestions) updated.add(`${s.sectionTitle}::${s.issue}`)
+  hiddenSuggestionKeys.value = updated
+  localStorage.setItem(`sg-hidden-${id}`, JSON.stringify([...updated]))
+}
+
 async function handleDiffSave(newScript: string) {
   savingScript.value = true
   scriptSaved.value  = false
@@ -493,12 +506,18 @@ async function handleDiffSave(newScript: string) {
     await agentsApi.updateScript(id, props.locationId, newScript)
     localScript.value = newScript
     if (agent.value) agent.value = { ...agent.value, script: newScript }
+    persistHiddenSuggestions(allSuggestions.value)
     diffPanelOpen.value = false
     scriptSaved.value   = true
     setTimeout(() => { scriptSaved.value = false }, 2500)
   } finally {
     savingScript.value = false
   }
+}
+
+function handleDiffDismiss() {
+  persistHiddenSuggestions(allSuggestions.value)
+  diffPanelOpen.value = false
 }
 
 function dismissEscalationBanner() {
