@@ -124,190 +124,175 @@
         <RecommendationPanel :recommendations="latestFailedKpis" />
       </section>
 
-      <!-- Call timeline -->
-      <section class="content-section analyses-section">
-        <div class="section-header">
-          <h2 class="section-title">Call Analyses</h2>
-          <span class="mono dim">{{ transcriptCards.length }} {{ transcriptCards.length === 1 ? 'call' : 'calls' }}</span>
+      <!-- Transcript table -->
+      <section class="content-section">
+        <div class="section-header-row">
+          <h2 class="section-title">Call Transcripts</h2>
+          <span class="section-count mono">{{ transcriptCards.length }}</span>
         </div>
 
-        <div v-if="!transcriptCards.length" class="empty-state">
-          <p>No calls yet. Send a webhook to trigger the first analysis.</p>
+        <div v-if="transcriptCards.length === 0" class="empty-state">
+          No transcripts yet — run a simulation to get started.
         </div>
 
-        <div class="analysis-timeline">
-          <div
-            v-for="tc in transcriptCards"
-            :key="tc.transcriptId"
-            class="analysis-card"
-            :class="cardClass(tc)"
-          >
-            <!-- ── Card header ── -->
-            <div class="analysis-header">
-              <div class="analysis-meta">
-                <span class="call-chip mono">{{ tc.ghlCallId || tc.transcriptId.slice(0, 8) }}</span>
-                <span class="analysis-date dim">{{ formatDate(latestAnalysis(tc)?.analyzedAt ?? tc.ingestedAt) }}</span>
-                <span v-if="tc.durationSeconds" class="analysis-duration dim mono">{{ formatDuration(tc.durationSeconds) }}</span>
-                <span v-if="!tc.analyses.length" class="status-pill" :class="tc.transcriptStatus">
-                  {{ tc.transcriptStatus === 'analysis_failed' ? 'Analysis failed' : 'Pending analysis' }}
+        <table v-else class="transcript-table">
+          <thead>
+            <tr>
+              <th>Score</th>
+              <th>Result</th>
+              <th>Date</th>
+              <th>Duration</th>
+              <th>Actions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="tc in transcriptCards"
+              :key="tc.transcriptId"
+              class="transcript-row"
+              :class="cardClass(tc)"
+              @click="openDrawer(tc)"
+            >
+              <td class="col-score">
+                <span v-if="latestAnalysis(tc)" class="score-val" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
+                  {{ pct(latestAnalysis(tc)!.overallScore) }}
                 </span>
-                <!-- Run count badge when more than one analysis -->
-                <span v-if="tc.analyses.length > 1" class="run-count-chip mono">
-                  {{ tc.analyses.length }} runs
+                <span v-else class="score-val pending">—</span>
+              </td>
+              <td class="col-result">
+                <span v-if="latestAnalysis(tc)" class="result-chip" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
+                  {{ latestAnalysis(tc)!.passed ? 'Pass' : 'Fail' }}
                 </span>
-              </div>
-              <div class="analysis-score-area">
-                <!-- Re-analyze / Analyze button -->
-                <button
-                  class="reanalyze-btn"
-                  :class="{ done: reanalyzeDone.has(tc.transcriptId) }"
-                  :disabled="reanalyzing.has(tc.transcriptId) || reanalyzeDone.has(tc.transcriptId)"
-                  @click="reanalyze(tc.transcriptId)"
-                  :title="reanalyzeDone.has(tc.transcriptId) ? 'Queued — refresh in a moment' : 'Re-run with current KPIs'"
+                <span v-else class="result-chip pending">Pending</span>
+              </td>
+              <td class="col-date mono">{{ formatDate(tc.ingestedAt) }}</td>
+              <td class="col-duration mono">{{ formatDuration(tc.durationSeconds) }}</td>
+              <td class="col-actions">
+                <span
+                  v-for="(count, type) in useActionCounts(latestAnalysis(tc)?.useActions ?? [])"
+                  :key="type"
+                  class="ua-pill"
+                  :class="type"
                 >
-                  <svg v-if="reanalyzing.has(tc.transcriptId)" width="11" height="11" viewBox="0 0 12 12" fill="none" class="spin">
-                    <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14" stroke-dashoffset="4"/>
-                  </svg>
-                  <svg v-else-if="reanalyzeDone.has(tc.transcriptId)" width="11" height="11" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else width="11" height="11" viewBox="0 0 12 12" fill="none">
-                    <path d="M10 6A4 4 0 1 1 6 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M6 0l2 2-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  {{ reanalyzing.has(tc.transcriptId) ? 'Queuing…' : reanalyzeDone.has(tc.transcriptId) ? 'Queued' : (tc.analyses.length ? 'Re-analyze' : 'Analyze') }}
-                </button>
-
-                <template v-if="latestAnalysis(tc)">
-                  <span class="score-badge" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
-                    {{ latestAnalysis(tc)!.passed ? 'PASS' : 'FAIL' }}
-                  </span>
-                  <span class="score-value mono" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
-                    {{ pct(latestAnalysis(tc)!.overallScore) }}
-                  </span>
-                </template>
-              </div>
-            </div>
-
-            <!-- ── Latest analysis body ── -->
-            <template v-if="latestAnalysis(tc)">
-              <p class="analysis-summary">{{ latestAnalysis(tc)!.summary }}</p>
-
-              <div v-if="latestAnalysis(tc)!.kpiScores?.length" class="kpi-grid">
-                <KpiScoreBar
-                  v-for="kpi in latestAnalysis(tc)!.kpiScores"
-                  :key="kpi.goal"
-                  :goal="kpi.goal"
-                  :score="kpi.score"
-                  :passed="kpi.passed"
-                  :evidence="kpi.evidence"
-                />
-              </div>
-
-              <template v-if="latestAnalysis(tc)!.useActions?.length">
-                <div class="use-actions-header">
-                  <span class="use-actions-title">Action Items</span>
-                  <span
-                    v-for="(count, type) in useActionCounts(latestAnalysis(tc)!.useActions)"
-                    :key="type"
-                    class="ua-count-chip"
-                    :class="type"
-                  >{{ count }} {{ typeShort(type) }}</span>
-                </div>
-                <div class="use-actions">
-                  <UseActionBadge
-                    v-for="(ua, i) in latestAnalysis(tc)!.useActions"
-                    :key="ua.id ?? i"
-                    :type="ua.type"
-                    :description="ua.description"
-                    :turnIndex="ua.transcriptTurnIndex ?? null"
-                    :actionId="ua.id ?? null"
-                  />
-                </div>
-              </template>
-
-              <ScriptSuggestionsPanel
-                v-if="latestAnalysis(tc)!.scriptSuggestions?.length"
-                :suggestions="latestAnalysis(tc)!.scriptSuggestions"
-              />
-            </template>
-
-            <!-- ── Pending / failed placeholder ── -->
-            <p v-else class="analysis-summary pending-msg">
-              {{ tc.transcriptStatus === 'analysis_failed'
-                ? 'Analysis failed. Click Re-analyze to retry with the current KPI configuration.'
-                : 'Waiting for analysis. The Temporal worker will pick this up shortly, or click Analyze to re-queue.' }}
-            </p>
-
-            <!-- ── Previous runs ── -->
-            <div v-if="tc.analyses.length > 1" class="prev-runs">
-              <button class="prev-runs-toggle" @click="toggleHistory(tc.transcriptId)">
-                <svg
-                  width="12" height="12" viewBox="0 0 12 12" fill="none"
-                  :style="{ transform: historyOpen.has(tc.transcriptId) ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }"
-                >
-                  <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  {{ count }} {{ typeShort(type) }}
+                </span>
+              </td>
+              <td class="col-chevron">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                {{ historyOpen.has(tc.transcriptId) ? 'Hide' : 'Show' }} {{ tc.analyses.length - 1 }} previous {{ tc.analyses.length - 1 === 1 ? 'run' : 'runs' }}
-              </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
 
-              <Transition name="slide">
-                <div v-if="historyOpen.has(tc.transcriptId)" class="prev-runs-list">
-                  <div
-                    v-for="(run, ri) in tc.analyses.slice(1)"
-                    :key="run.id"
-                    class="prev-run-item"
-                    :class="run.passed ? 'pass' : 'fail'"
-                  >
-                    <div class="prev-run-header">
-                      <span class="prev-run-label mono">Run #{{ tc.analyses.length - 1 - ri }}</span>
-                      <span class="prev-run-date dim">{{ formatDate(run.analyzedAt) }}</span>
-                      <span class="prev-run-score mono" :class="run.passed ? 'pass' : 'fail'">{{ pct(run.overallScore) }}</span>
-                      <span class="score-badge sm" :class="run.passed ? 'pass' : 'fail'">{{ run.passed ? 'PASS' : 'FAIL' }}</span>
-                    </div>
-                    <p class="prev-run-summary">{{ run.summary }}</p>
-                    <div v-if="run.kpiScores?.length" class="kpi-grid compact">
-                      <KpiScoreBar
-                        v-for="kpi in run.kpiScores"
-                        :key="kpi.goal"
-                        :goal="kpi.goal"
-                        :score="kpi.score"
-                        :passed="kpi.passed"
-                        :evidence="kpi.evidence"
-                      />
+      <!-- Detail drawer -->
+      <Teleport to="body">
+        <Transition name="drawer">
+          <div v-if="drawerOpen" class="drawer-overlay" @click.self="closeDrawer">
+            <div class="drawer-panel" @click.stop>
+              <div class="drawer-header">
+                <div class="drawer-title-row">
+                  <span class="drawer-title">Call Analysis</span>
+                  <span v-if="drawerCard && latestAnalysis(drawerCard)" class="result-chip" :class="latestAnalysis(drawerCard)!.passed ? 'pass' : 'fail'">
+                    {{ latestAnalysis(drawerCard)!.passed ? 'Pass' : 'Fail' }}
+                  </span>
+                </div>
+                <button class="drawer-close" @click="closeDrawer">✕</button>
+              </div>
+
+              <div v-if="drawerCard" class="drawer-body">
+                <!-- Score + meta -->
+                <div class="drawer-meta">
+                  <div class="drawer-meta-item">
+                    <span class="meta-label">Score</span>
+                    <span class="meta-val score-large" :class="latestAnalysis(drawerCard)?.passed ? 'pass' : 'fail'">
+                      {{ latestAnalysis(drawerCard) ? pct(latestAnalysis(drawerCard)!.overallScore) : '—' }}
+                    </span>
+                  </div>
+                  <div class="drawer-meta-item">
+                    <span class="meta-label">Date</span>
+                    <span class="meta-val mono">{{ formatDate(drawerCard.ingestedAt) }}</span>
+                  </div>
+                  <div class="drawer-meta-item">
+                    <span class="meta-label">Duration</span>
+                    <span class="meta-val mono">{{ formatDuration(drawerCard.durationSeconds) }}</span>
+                  </div>
+                  <div class="drawer-meta-item">
+                    <span class="meta-label">Model</span>
+                    <span class="meta-val mono">{{ (latestAnalysis(drawerCard) as any)?.llmModel ?? '—' }}</span>
+                  </div>
+                </div>
+
+                <!-- Summary -->
+                <div v-if="latestAnalysis(drawerCard)?.summary" class="drawer-block">
+                  <h3 class="drawer-block-title">Summary</h3>
+                  <p class="drawer-summary">{{ latestAnalysis(drawerCard)!.summary }}</p>
+                </div>
+
+                <!-- KPI Scores -->
+                <div v-if="latestAnalysis(drawerCard)?.kpiScores?.length" class="drawer-block">
+                  <h3 class="drawer-block-title">KPI Scores</h3>
+                  <div class="kpi-score-list">
+                    <div
+                      v-for="k in latestAnalysis(drawerCard)!.kpiScores"
+                      :key="k.goal"
+                      class="kpi-score-row"
+                      :class="k.passed ? 'pass' : 'fail'"
+                    >
+                      <div class="kpi-score-top">
+                        <span class="kpi-goal-name">{{ k.goal }}</span>
+                        <span class="kpi-score-val" :class="k.passed ? 'pass' : 'fail'">{{ pct(k.score) }}</span>
+                      </div>
+                      <p v-if="k.evidence" class="kpi-evidence">{{ k.evidence }}</p>
                     </div>
                   </div>
                 </div>
-              </Transition>
-            </div>
 
-            <!-- ── Transcript toggle ── -->
-            <button
-              v-if="tc.turns?.length"
-              class="transcript-toggle"
-              @click="toggleTranscript(tc.transcriptId)"
-            >
-              <svg
-                width="14" height="14" viewBox="0 0 14 14" fill="none"
-                :style="{ transform: openTranscripts.has(tc.transcriptId) ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease' }"
-              >
-                <path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              {{ openTranscripts.has(tc.transcriptId) ? 'Hide transcript' : 'View transcript' }}
-              <span class="turn-count mono">{{ tc.turns.length }} turns</span>
-            </button>
+                <!-- Use Actions -->
+                <div v-if="latestAnalysis(drawerCard)?.useActions?.length" class="drawer-block">
+                  <h3 class="drawer-block-title">Use Actions</h3>
+                  <div class="use-actions-list">
+                    <UseActionBadge
+                      v-for="ua in latestAnalysis(drawerCard)!.useActions"
+                      :key="ua.id ?? ua.description"
+                      :type="ua.type"
+                      :description="ua.description"
+                      :turnIndex="ua.transcriptTurnIndex"
+                      :actionId="ua.id"
+                    />
+                  </div>
+                </div>
 
-            <Transition name="transcript-slide">
-              <div v-if="openTranscripts.has(tc.transcriptId)" class="transcript-wrap">
-                <TranscriptViewer
-                  :turns="tc.turns"
-                  :useActions="latestAnalysis(tc)?.useActions ?? []"
-                />
+                <!-- Transcript -->
+                <div class="drawer-block">
+                  <h3 class="drawer-block-title">Transcript</h3>
+                  <TranscriptViewer
+                    :turns="drawerCard.turns"
+                    :useActions="latestAnalysis(drawerCard)?.useActions ?? []"
+                  />
+                </div>
+
+                <!-- Re-analyze -->
+                <div class="drawer-footer">
+                  <button
+                    class="reanalyze-btn"
+                    :disabled="reanalyzing.has(drawerCard.transcriptId)"
+                    @click="reanalyze(drawerCard.transcriptId)"
+                  >
+                    <svg v-if="reanalyzing.has(drawerCard.transcriptId)" width="12" height="12" viewBox="0 0 12 12" fill="none" class="spin">
+                      <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14" stroke-dashoffset="4"/>
+                    </svg>
+                    {{ reanalyzing.has(drawerCard.transcriptId) ? 'Re-analyzing…' : reanalyzeDone.has(drawerCard.transcriptId) ? 'Queued ✓' : 'Re-analyze' }}
+                  </button>
+                </div>
               </div>
-            </Transition>
+            </div>
           </div>
-        </div>
-      </section>
+        </Transition>
+      </Teleport>
     </template>
   </div>
 </template>
@@ -345,10 +330,6 @@ const localScript = ref('')
 const savingScript = ref(false)
 const scriptSaved = ref(false)
 
-// Expanded sets
-const openTranscripts = ref<Set<string>>(new Set())
-const historyOpen = ref<Set<string>>(new Set())
-
 // Re-analyze state keyed by transcriptId
 const reanalyzing = ref<Set<string>>(new Set())
 const reanalyzeDone = ref<Set<string>>(new Set())
@@ -361,6 +342,21 @@ const hiddenSuggestionKeys = ref<Set<string>>(new Set())
 
 // Escalation banner state
 const bannerDismissed = ref(false)
+
+// Drawer state
+const drawerOpen = ref(false)
+const drawerCard = ref<TranscriptCard | null>(null)
+
+function openDrawer(tc: TranscriptCard) {
+  drawerCard.value = tc
+  drawerOpen.value = true
+}
+
+function closeDrawer() {
+  drawerOpen.value = false
+  // keep drawerCard alive until transition ends
+  setTimeout(() => { drawerCard.value = null }, 300)
+}
 
 onMounted(async () => {
   try {
@@ -446,18 +442,6 @@ const latestFailedKpis = computed<KpiScore[]>(() => {
   return (first.analyses[0].kpiScores ?? []).filter((k) => !k.passed)
 })
 
-function toggleTranscript(transcriptId: string) {
-  const s = new Set(openTranscripts.value)
-  s.has(transcriptId) ? s.delete(transcriptId) : s.add(transcriptId)
-  openTranscripts.value = s
-}
-
-function toggleHistory(transcriptId: string) {
-  const s = new Set(historyOpen.value)
-  s.has(transcriptId) ? s.delete(transcriptId) : s.add(transcriptId)
-  historyOpen.value = s
-}
-
 async function saveScript() {
   savingScript.value = true
   scriptSaved.value = false
@@ -539,14 +523,16 @@ function pct(score: number): string {
   return `${Math.round(score * 100)}%`
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function formatDuration(seconds: number): string {
+function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds) return '—'
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 </script>
 
@@ -717,322 +703,9 @@ function formatDuration(seconds: number): string {
 
 /* ── Content sections ────────────────────────────────────── */
 .content-section { margin-bottom: 20px; }
-.analyses-section { margin-bottom: 0; }
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.section-title {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-2);
-}
-
-/* ── Analysis timeline ───────────────────────────────────── */
-.analysis-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.analysis-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  animation: fade-up 300ms ease-out both;
-  border-left-width: 3px;
-}
-
-.analysis-card.pass { border-left-color: var(--pass); }
-.analysis-card.fail { border-left-color: var(--fail); }
-.analysis-card.pending { border-left-color: var(--warn); opacity: 0.85; }
-
-/* ── Card header ─────────────────────────────────────────── */
-.analysis-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.analysis-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.call-chip {
-  font-size: 11px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--text-2);
-}
-
-.analysis-date, .analysis-duration { font-size: 12px; }
-
-.analysis-score-area {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.score-badge {
-  font-size: 9.5px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-
-.score-badge.pass { background: var(--pass-dim); color: var(--pass); border: 1px solid rgba(0,201,141,0.2); }
-.score-badge.fail { background: var(--fail-dim); color: var(--fail); border: 1px solid rgba(255,65,105,0.2); }
-.score-badge.sm { font-size: 8.5px; padding: 2px 6px; }
-
-.score-value { font-size: 18px; font-weight: 600; line-height: 1; }
-.score-value.pass { color: var(--pass); }
-.score-value.fail { color: var(--fail); }
 
 /* ── Spinner ─────────────────────────────────────────────── */
 .spin { animation: spin 0.8s linear infinite; }
-
-/* ── Re-analyze button ───────────────────────────────────── */
-.reanalyze-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-hover);
-  color: var(--text-2);
-  cursor: pointer;
-  transition: all var(--t-fast);
-}
-
-.reanalyze-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(79, 136, 255, 0.08);
-}
-
-.reanalyze-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.reanalyze-btn.done {
-  border-color: var(--pass);
-  color: var(--pass);
-  background: var(--pass-dim);
-}
-
-/* ── Status pill ─────────────────────────────────────────── */
-.status-pill {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-}
-
-.status-pill.pending {
-  background: rgba(255, 171, 46, 0.12);
-  color: var(--warn);
-  border: 1px solid rgba(255, 171, 46, 0.3);
-}
-
-.status-pill.analysis_failed {
-  background: var(--fail-dim);
-  color: var(--fail);
-  border: 1px solid rgba(255, 65, 105, 0.3);
-}
-
-/* ── Run count badge ─────────────────────────────────────── */
-.run-count-chip {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 99px;
-  background: rgba(79, 136, 255, 0.1);
-  color: var(--accent);
-  border: 1px solid rgba(79, 136, 255, 0.2);
-}
-
-/* ── Summary ─────────────────────────────────────────────── */
-.analysis-summary {
-  font-size: 13.5px;
-  color: var(--text-2);
-  line-height: 1.65;
-}
-
-.pending-msg { color: var(--text-muted); font-style: italic; }
-
-/* ── KPI grid ────────────────────────────────────────────── */
-.kpi-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.kpi-grid.compact { padding: 10px 12px; gap: 8px; }
-
-/* ── Use actions ─────────────────────────────────────────── */
-.use-actions-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.use-actions-title {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-}
-
-.ua-count-chip {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 99px;
-}
-
-.ua-count-chip.missed_opportunity { background: rgba(255, 171, 46, 0.12); color: var(--warn); border: 1px solid rgba(255, 171, 46, 0.25); }
-.ua-count-chip.deviation { background: rgba(79, 136, 255, 0.12); color: var(--accent); border: 1px solid rgba(79, 136, 255, 0.25); }
-.ua-count-chip.escalation_needed { background: var(--fail-dim); color: var(--fail); border: 1px solid rgba(255, 65, 105, 0.25); }
-
-.use-actions { display: flex; flex-direction: column; gap: 6px; }
-
-/* ── Previous runs ───────────────────────────────────────── */
-.prev-runs { display: flex; flex-direction: column; gap: 10px; }
-
-.prev-runs-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 5px 12px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--t-fast);
-  align-self: flex-start;
-}
-
-.prev-runs-toggle:hover { color: var(--text-2); border-color: var(--text-muted); background: var(--bg-hover); }
-
-.prev-runs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-left: 2px solid var(--border-subtle);
-  padding-left: 14px;
-  margin-left: 4px;
-}
-
-.prev-run-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  border-left-width: 3px;
-}
-
-.prev-run-item.pass { border-left-color: var(--pass); }
-.prev-run-item.fail { border-left-color: var(--fail); }
-
-.prev-run-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.prev-run-label { font-size: 11px; font-weight: 700; color: var(--text-2); }
-.prev-run-date { font-size: 11px; }
-.prev-run-score { font-size: 14px; font-weight: 600; }
-.prev-run-score.pass { color: var(--pass); }
-.prev-run-score.fail { color: var(--fail); }
-
-.prev-run-summary {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.6;
-  margin: 0;
-}
-
-/* ── Transcript toggle ───────────────────────────────────── */
-.transcript-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-2);
-  cursor: pointer;
-  transition: all var(--t-fast);
-  align-self: flex-start;
-}
-
-.transcript-toggle:hover { background: var(--bg-hover); border-color: var(--text-muted); color: var(--text); }
-
-.turn-count {
-  font-size: 10px;
-  color: var(--text-muted);
-  background: var(--bg-hover);
-  padding: 1px 6px;
-  border-radius: 99px;
-  margin-left: 2px;
-}
-
-/* ── Transcript wrap ─────────────────────────────────────── */
-.transcript-wrap {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--bg-surface);
-}
-
-/* ── Slide transition (prev runs) ────────────────────────── */
-.slide-enter-active, .slide-leave-active { transition: all 220ms ease; overflow: hidden; }
-.slide-enter-from, .slide-leave-to { opacity: 0; max-height: 0; }
-.slide-enter-to, .slide-leave-from { opacity: 1; max-height: 3000px; }
-
-/* ── Transcript slide transition ─────────────────────────── */
-.transcript-slide-enter-active, .transcript-slide-leave-active { transition: all 250ms ease; overflow: hidden; }
-.transcript-slide-enter-from, .transcript-slide-leave-to { opacity: 0; max-height: 0; }
-.transcript-slide-enter-to, .transcript-slide-leave-from { opacity: 1; max-height: 2000px; }
 
 /* ── Loading ─────────────────────────────────────────────── */
 .loading-state { padding: 28px 32px; }
@@ -1064,12 +737,12 @@ function formatDuration(seconds: number): string {
 
 .empty-state {
   padding: 32px;
-  color: var(--text-muted);
-  font-size: 14px;
   text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
 }
 
 /* ── Escalation banner ───────────────────────────────────── */
@@ -1131,4 +804,320 @@ function formatDuration(seconds: number): string {
   background: rgba(79, 136, 255, 0.14);
   border-color: rgba(79, 136, 255, 0.4);
 }
+
+/* ── Transcript table ────────────────────────────────────── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+  margin: 0;
+}
+
+.section-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  border-radius: 99px;
+}
+
+.transcript-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.transcript-table thead tr {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.transcript-table th {
+  padding: 9px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.transcript-row {
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+
+.transcript-row:last-child { border-bottom: none; }
+.transcript-row:hover { background: var(--bg-hover); }
+
+.transcript-table td {
+  padding: 11px 14px;
+  vertical-align: middle;
+}
+
+.col-score { width: 72px; }
+.col-result { width: 80px; }
+.col-date { width: 150px; }
+.col-duration { width: 80px; }
+.col-chevron { width: 32px; text-align: right; color: var(--text-muted); }
+
+.score-val {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.score-val.pass { color: var(--pass); }
+.score-val.fail { color: var(--fail); }
+.score-val.pending { color: var(--text-muted); }
+
+.result-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 99px;
+}
+
+.result-chip.pass { background: rgba(var(--pass-rgb, 34,197,94), 0.12); color: var(--pass); }
+.result-chip.fail { background: rgba(var(--fail-rgb, 255,65,105), 0.12); color: var(--fail); }
+.result-chip.pending { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
+
+.ua-pill {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.ua-pill.missed_opportunity { background: rgba(245,158,11,0.12); color: var(--warn); }
+.ua-pill.deviation          { background: rgba(79,136,255,0.1);  color: var(--accent); }
+.ua-pill.escalation_needed  { background: rgba(255,65,105,0.1);  color: var(--fail); }
+
+/* ── Right drawer ────────────────────────────────────────── */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-panel {
+  width: 700px;
+  max-width: 90vw;
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.drawer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.drawer-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--t-fast);
+}
+
+.drawer-close:hover { background: var(--bg-hover); color: var(--text-2); }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drawer-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.drawer-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.meta-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.score-large {
+  font-size: 22px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.score-large.pass { color: var(--pass); }
+.score-large.fail { color: var(--fail); }
+
+.drawer-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-block-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.drawer-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.kpi-score-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-score-row {
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  border-left-width: 3px;
+}
+
+.kpi-score-row.pass { border-left-color: var(--pass); }
+.kpi-score-row.fail { border-left-color: var(--fail); }
+
+.kpi-score-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kpi-goal-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.kpi-score-val {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.kpi-score-val.pass { color: var(--pass); }
+.kpi-score-val.fail { color: var(--fail); }
+
+.kpi-evidence {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.use-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.reanalyze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.reanalyze-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+.reanalyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Drawer slide transition */
+.drawer-enter-active, .drawer-leave-active { transition: all 280ms ease; }
+.drawer-enter-from .drawer-panel, .drawer-leave-to .drawer-panel { transform: translateX(100%); }
+.drawer-enter-from, .drawer-leave-to { background: rgba(0, 0, 0, 0); }
 </style>
