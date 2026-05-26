@@ -28,6 +28,7 @@ const { add: addToast } = useToast()
 
 const { connected } = useSSE(locationId, (event) => {
   streamStore.setConnected(true)
+  streamStore.setLastEvent(event)
 
   if (event.type === 'analysis.complete' && event.agentId) {
     agentsStore.fetchAll(locationId)

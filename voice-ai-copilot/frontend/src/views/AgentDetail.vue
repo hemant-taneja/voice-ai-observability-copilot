@@ -298,11 +298,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { agentsApi } from '../api/agents'
 import { analysisApi } from '../api/analysis'
 import { kpiApi } from '../api/kpi'
+import { useStreamStore } from '../stores/stream'
 import type { AgentDetail } from '../types/agent.types'
 import type { KpiConfig, KpiGoal, KpiScore, TranscriptCard, AnalysisVersion, UseAction, ScriptSuggestion } from '../types/analysis.types'
 import UseActionBadge from '../components/UseActionBadge.vue'
@@ -357,6 +358,29 @@ function closeDrawer() {
   // keep drawerCard alive until transition ends
   setTimeout(() => { drawerCard.value = null }, 300)
 }
+
+// SSE live refresh — when an analysis.complete/failed event arrives for this
+// agent, re-fetch transcript cards and sync the open drawer card in place.
+const streamStore = useStreamStore()
+
+watch(() => streamStore.lastEvent, async (event) => {
+  if (!event || !agent.value) return
+  if (event.agentId !== agent.value.ghlAgentId) return
+  if (event.type !== 'analysis.complete' && event.type !== 'analysis.failed') return
+
+  const [fresh, freshAgent] = await Promise.all([
+    analysisApi.getByAgent(id, props.locationId),
+    agentsApi.getById(id, props.locationId),
+  ])
+  transcriptCards.value = fresh
+  agent.value = freshAgent
+
+  // Sync the open drawer card so analysis renders without closing it
+  if (drawerCard.value) {
+    const updated = fresh.find((tc) => tc.transcriptId === drawerCard.value!.transcriptId)
+    if (updated) drawerCard.value = updated
+  }
+})
 
 onMounted(async () => {
   try {
