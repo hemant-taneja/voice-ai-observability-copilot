@@ -21,7 +21,7 @@ describe('TranscriptViewer', () => {
 
   it('renders a UseActionBadge after the flagged turn', () => {
     const wrapper = mount(TranscriptViewer, { props: { turns, useActions } })
-    expect(wrapper.findAll('.use-action-badge')).toHaveLength(1)
+    expect(wrapper.findAll('.inline-action')).toHaveLength(1)
     expect(wrapper.text()).toContain('Did not confirm contact number')
   })
 
