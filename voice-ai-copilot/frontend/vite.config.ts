@@ -11,7 +11,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': 'http://localhost:3000',
-      '/stream': 'http://localhost:3000',
+      '/stream': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+      },
       '/webhooks': 'http://localhost:3000',
     },
   },

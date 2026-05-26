@@ -16,8 +16,16 @@ streamRouter.get('/', ghlAuth(), (req: Request, res: Response) => {
   res.write(`data: ${JSON.stringify({ type: 'connected', locationId })}\n\n`)
 
   sseManager.add(locationId, res)
+  console.log(`[SSE] client connected locationId=${locationId}`)
+
+  // Keepalive: send SSE comment every 15 s to prevent proxy/browser timeout
+  const heartbeat = setInterval(() => {
+    res.write(': keep-alive\n\n')
+  }, 15_000)
 
   req.on('close', () => {
+    clearInterval(heartbeat)
     sseManager.remove(locationId, res)
+    console.log(`[SSE] client disconnected locationId=${locationId}`)
   })
 })
