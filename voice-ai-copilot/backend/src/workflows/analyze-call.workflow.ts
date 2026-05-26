@@ -18,6 +18,7 @@ const {
   persistResults,
   broadcastSSE,
   broadcastSSEFailure,
+  markTranscriptFailed,
 } = proxyActivities<typeof activities>(defaultOptions)
 
 const { callLLM } = proxyActivities<typeof activities>(llmOptions)
@@ -32,12 +33,13 @@ export interface AnalyzeCallInput {
 export async function analyzeCallWorkflow(input: AnalyzeCallInput): Promise<void> {
   try {
     const transcript = await loadTranscript(input.transcriptId)
-    const kpiConfig  = await loadKpiConfig(input.agentId)
+    const kpiConfig  = await loadKpiConfig(input.kpiConfigId)
     const prompt     = await buildPrompt(transcript, kpiConfig)
     const output     = await callLLM(prompt)
     await persistResults(output, input)
     await broadcastSSE(input.locationId, input.agentId)
   } catch (err) {
+    await markTranscriptFailed(input.transcriptId)
     await broadcastSSEFailure(input.locationId, input.agentId)
     throw err
   }
