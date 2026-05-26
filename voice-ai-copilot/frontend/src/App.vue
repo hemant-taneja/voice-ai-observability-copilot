@@ -31,7 +31,7 @@ const { add: addToast } = useToast()
 // Hydrate reviewed state from localStorage once on app start
 reviewStore.hydrate()
 
-const { connected } = useSSE(locationId, (event) => {
+const { connected } = useSSE(locationId, async (event) => {
   streamStore.setConnected(true)
   streamStore.setLastEvent(event)
 

@@ -6,7 +6,7 @@ export interface SSEEvent {
   locationId?: string
 }
 
-export function useSSE(locationId: string, onEvent: (event: SSEEvent) => void) {
+export function useSSE(locationId: string, onEvent: (event: SSEEvent) => void | Promise<void>) {
   const connected = ref(false)
   let source: EventSource | null = null
   let retryDelay = 1000
