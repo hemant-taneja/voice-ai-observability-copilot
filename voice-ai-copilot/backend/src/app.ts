@@ -6,6 +6,7 @@ import { streamRouter } from './routes/stream'
 import { kpiRouter } from './routes/kpi'
 import { webhookRouter } from './routes/webhooks'
 import { agentsRouter } from './routes/agents'
+import { oauthRouter } from './routes/oauth'
 import { errorHandler } from './middleware/error-handler'
 import { sseManager, SSEEvent } from './lib/sse-manager'
 
@@ -14,8 +15,11 @@ export const app = express()
 app.use(helmet())
 app.use(cors())
 
-// Webhook route MUST be registered before express.json() — it uses express.raw() for HMAC verification
+// Webhook routes MUST be registered before express.json() — they use express.raw() for signature verification
 app.use('/webhooks', webhookRouter)
+
+// OAuth callback — registered before json middleware to avoid body parsing issues
+app.use('/oauth', oauthRouter)
 
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))

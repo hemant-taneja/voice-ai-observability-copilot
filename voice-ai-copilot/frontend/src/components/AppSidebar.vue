@@ -3,7 +3,7 @@
     <!-- Brand -->
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg width="20" height="14" viewBox="0 0 24 16" fill="none">
+        <svg width="20" height="14" viewBox="-1 -1 26 18" fill="none">
           <path d="M0 8 Q3 1 6 8 Q9 15 12 8 Q15 1 18 8 Q21 15 24 8"
             stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none"/>
         </svg>
