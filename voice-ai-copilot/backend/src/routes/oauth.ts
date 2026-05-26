@@ -26,6 +26,11 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
       return
     }
 
+    if (!config.ghlClientId || !config.ghlClientSecret || !config.appUrl) {
+      res.status(503).send('<h1>Not configured</h1><p>GHL_CLIENT_ID, GHL_CLIENT_SECRET, and APP_URL must be set.</p>')
+      return
+    }
+
     const { data } = await axios.post(
       `${GHL_BASE}/oauth/token`,
       {
@@ -51,7 +56,7 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
              token_expires_at = EXCLUDED.token_expires_at`,
         [data.locationId, data.access_token, data.refresh_token, expiresAt]
       )
-      res.redirect(`${config.appUrl}/?locationId=${data.locationId}&installed=1`)
+      res.redirect(`${config.appUrl ?? '/'}/?locationId=${data.locationId}&installed=1`)
     } else if (data.userType === 'Company') {
       // Agency install — store agency token keyed by companyId.
       // Individual location tokens are minted via the AppInstall webhook
@@ -65,7 +70,7 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
              token_expires_at = EXCLUDED.token_expires_at`,
         [`company:${data.companyId}`, data.access_token, data.refresh_token, expiresAt]
       )
-      res.redirect(`${config.appUrl}/?installed=1`)
+      res.redirect(`${config.appUrl ?? '/'}/?installed=1`)
     } else {
       res.status(400).send('<h1>Installation failed</h1><p>Unknown token type received.</p>')
     }
