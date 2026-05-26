@@ -2,7 +2,7 @@
   <div class="app-shell" :data-theme="theme">
     <AppSidebar :locationId="locationId" :theme="theme" @toggle-theme="toggleTheme" />
     <main class="app-main">
-      <RouterView :locationId="locationId" />
+      <RouterView :locationId="locationId" :key="$route.path" />
     </main>
     <ToastContainer />
   </div>

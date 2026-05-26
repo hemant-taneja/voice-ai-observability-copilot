@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!--
+      Single horizontal gradient spanning the full design width
+      (userSpaceOnUse so every element samples the correct hue by position:
+       left ear cup = blue, right ear cup = green, bars blend left-to-right)
+    -->
+    <linearGradient id="g" x1="70" y1="0" x2="442" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#4f88ff"/>
+      <stop offset="100%" stop-color="#00c98d"/>
+    </linearGradient>
+
+    <!--
+      Mask: hides the circle stroke in the lower-left arc segment
+      so the speech-bubble tail replaces it seamlessly.
+      The polygon is sized to cover the 24 px stroke width on both sides.
+    -->
+    <mask id="tailMask">
+      <rect width="512" height="512" fill="white"/>
+      <polygon points="228,388 74,455 148,304 258,350" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- White background (marketplace-ready, matches reference style) -->
+  <rect width="512" height="512" fill="white"/>
+
+  <!-- Headphone ear cups drawn first so circle stroke overlaps their edges -->
+  <!-- Left ear cup -->
+  <rect x="72" y="188" width="38" height="54" rx="13" fill="url(#g)"/>
+  <!-- Right ear cup -->
+  <rect x="402" y="188" width="38" height="54" rx="13" fill="url(#g)"/>
+
+  <!-- Speech bubble ring — tail arc masked out -->
+  <circle cx="256" cy="214" r="150"
+          fill="none" stroke="url(#g)" stroke-width="24"
+          mask="url(#tailMask)"/>
+
+  <!--
+    Speech bubble tail.
+    Two endpoints sit on (or just past) the circle at the lower-left.
+    Point A: dx=-46, dy=+143 from center  →  (210, 357)
+    Point B: dx=-90, dy=+120 from center  →  (166, 334)
+    Both extended ~6 px outward so the round caps meet the circle edge cleanly.
+  -->
+  <path d="M 208,363 Q 140,432 162,339"
+        fill="none" stroke="url(#g)" stroke-width="24" stroke-linecap="round"/>
+
+  <!-- Waveform bars — 5 pill-shaped bars, centered at (256, 214) -->
+  <!-- width=17, gap=11 → step=28; heights: 52 / 86 / 114 / 86 / 52 -->
+  <rect x="191" y="188" width="17" height="52"  rx="8" fill="url(#g)"/>
+  <rect x="219" y="171" width="17" height="86"  rx="8" fill="url(#g)"/>
+  <rect x="247" y="157" width="17" height="114" rx="8" fill="url(#g)"/>
+  <rect x="275" y="171" width="17" height="86"  rx="8" fill="url(#g)"/>
+  <rect x="303" y="188" width="17" height="52"  rx="8" fill="url(#g)"/>
+</svg>

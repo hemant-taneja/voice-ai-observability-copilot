@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/AgentDetail.vue'),
     props: true,
   },
+  {
+    path: '/playground',
+    name: 'Playground',
+    component: () => import('../views/Playground.vue'),
+  },
 ]
 
 export default createRouter({

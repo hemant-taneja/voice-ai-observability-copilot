@@ -33,6 +33,19 @@
         </svg>
         <span>Overview</span>
       </RouterLink>
+
+      <RouterLink
+        :to="{ path: '/playground', query: { locationId } }"
+        class="nav-item"
+        :class="{ active: route.name === 'Playground' }"
+      >
+        <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M5 2h2v5l3 3-1 1-3-3H3l-1-1 3-3V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/>
+          <circle cx="11.5" cy="11.5" r="3" stroke="currentColor" stroke-width="1.4" fill="none"/>
+          <path d="M10.5 11.5h2M11.5 10.5v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>Playground</span>
+      </RouterLink>
     </nav>
 
     <!-- Divider -->

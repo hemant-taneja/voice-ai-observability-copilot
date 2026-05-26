@@ -12,7 +12,8 @@ export function useSSE(locationId: string, onEvent: (event: SSEEvent) => void | 
   let retryDelay = 1000
 
   function connect() {
-    source = new EventSource(`/stream?locationId=${encodeURIComponent(locationId)}`)
+    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
+    source = new EventSource(`${base}/stream?locationId=${encodeURIComponent(locationId)}`)
 
     source.onopen = () => {
       connected.value = true

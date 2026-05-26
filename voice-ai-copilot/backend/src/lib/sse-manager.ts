@@ -22,13 +22,16 @@ export class SSEManager {
 
   broadcast(locationId: string, event: SSEEvent): void {
     const clients = this.connections.get(locationId)
+    console.log(`[sseManager] broadcast → locationId=${locationId} type=${event.type} clients=${clients?.size ?? 0}`)
     if (!clients?.size) return
 
     const data = `data: ${JSON.stringify(event)}\n\n`
     for (const res of clients) {
       try {
         res.write(data)
-      } catch {
+        console.log(`[sseManager] wrote event to client`)
+      } catch (err) {
+        console.log(`[sseManager] write failed, removing client:`, err)
         this.remove(locationId, res)
       }
     }

@@ -4,12 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "worker": "ts-node-dev --respawn --transpile-only src/workers/temporal-worker.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest --runInBand",
     "test:watch": "jest --watch --runInBand",
     "migrate": "ts-node src/db/migrate.ts",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/scripts/seed.ts",
+    "simulate": "ts-node src/scripts/simulate-webhook.ts",
+    "simulate:all": "ts-node src/scripts/simulate-webhook.ts all"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",

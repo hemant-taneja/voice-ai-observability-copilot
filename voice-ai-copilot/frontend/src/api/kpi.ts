@@ -7,4 +7,7 @@ export const kpiApi = {
 
   upsert: (agentId: string, locationId: string, goals: KpiGoal[], successThreshold: number): Promise<KpiConfig> =>
     api.put<KpiConfig>(`/api/kpi/${agentId}`, { goals, successThreshold }, { params: { locationId } }).then((r) => r.data),
+
+  suggestGoals: (agentId: string, locationId: string): Promise<KpiGoal[]> =>
+    api.post<{ goals: KpiGoal[] }>(`/api/kpi/${agentId}/suggest`, {}, { params: { locationId } }).then((r) => r.data.goals),
 }

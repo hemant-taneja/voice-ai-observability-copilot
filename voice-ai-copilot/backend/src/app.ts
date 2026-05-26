@@ -33,6 +33,7 @@ app.use('/api/agents', agentsRouter)
 // since it runs in a separate process and cannot share the in-memory sseManager.
 app.post('/internal/broadcast', (req: Request, res: Response) => {
   const remote = req.socket.remoteAddress
+  console.log(`[/internal/broadcast] called from ${remote}`, req.body)
   if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
     res.status(403).json({ error: 'Forbidden' })
     return

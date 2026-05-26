@@ -135,16 +135,18 @@ export class AgentsService {
     }))
   }
 
-  async reanalyzeTranscript(agentId: string, transcriptId: string, locationId: string): Promise<{ kpiConfigId: string }> {
-    // Verify the transcript belongs to this agent/location
+  async reanalyzeTranscript(agentId: string, transcriptId: string, locationId: string): Promise<{ kpiConfigId: string; ghlAgentId: string }> {
+    // Verify the transcript belongs to this agent/location and fetch ghl_agent_id
     const { rows } = await this.database.query(
-      `SELECT t.id
+      `SELECT t.id, a.ghl_agent_id
        FROM transcripts t
        JOIN agents a ON a.id = t.agent_id
        WHERE t.id = $1 AND a.id = $2 AND a.location_id = $3`,
       [transcriptId, agentId, locationId]
     )
     if (!rows[0]) throw new Error('Transcript not found')
+
+    const ghlAgentId: string = rows[0].ghl_agent_id
 
     // Get current KPI config for the agent (always use latest, not snapshot)
     const { rows: kpiRows } = await this.database.query(
@@ -161,7 +163,7 @@ export class AgentsService {
       [transcriptId]
     )
 
-    return { kpiConfigId }
+    return { kpiConfigId, ghlAgentId }
   }
 
   async updateScript(agentId: string, locationId: string, script: string): Promise<void> {
