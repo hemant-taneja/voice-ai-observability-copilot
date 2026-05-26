@@ -5,13 +5,17 @@
         reverse_proxy app:3000
     }
 
-    handle /stream/* {
+    handle /stream* {
         reverse_proxy app:3000 {
             flush_interval -1
         }
     }
 
     handle /webhooks/* {
+        reverse_proxy app:3000
+    }
+
+    handle /oauth/* {
         reverse_proxy app:3000
     }
 
