@@ -40,6 +40,10 @@ agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: 
     res.json({ ok: true, synced })
   } catch (err) {
     if (err instanceof GHLClientError) {
+      console.warn('[agents/sync] HighLevel sync failed', {
+        status: err.upstreamStatus,
+        message: err.upstreamMessage,
+      })
       next(new AppError(
         'Unable to sync agents from HighLevel',
         502,

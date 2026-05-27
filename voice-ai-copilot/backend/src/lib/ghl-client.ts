@@ -13,7 +13,8 @@ interface TokenRow extends Record<string, unknown> {
 export class GHLClientError extends Error {
   constructor(
     message: string,
-    public readonly upstreamStatus?: number
+    public readonly upstreamStatus?: number,
+    public readonly upstreamMessage?: unknown
   ) {
     super(message)
     this.name = 'GHLClientError'
@@ -62,7 +63,7 @@ export class GHLClient {
       const { data } = await axios.get<T>(`${GHL_BASE}${path}`, {
         headers: {
           Authorization: `Bearer ${token.access_token}`,
-          Version: '2021-04-15',
+          Version: '2023-02-21',
           Accept: 'application/json',
         },
         params,
@@ -72,9 +73,10 @@ export class GHLClient {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401 && !retried) {
         await this.refreshToken(locationId, token.refresh_token)
-        return this.get<T>(path, locationId, true)
+        return this.get<T>(path, locationId, true, params)
       }
-      throw new GHLClientError(`HighLevel request failed for ${path}`, status)
+      const data = (err as { response?: { data?: unknown } })?.response?.data
+      throw new GHLClientError(`HighLevel request failed for ${path}`, status, data)
     }
   }
 
@@ -83,7 +85,7 @@ export class GHLClient {
       '/voice-ai/agents',
       locationId,
       false,
-      { locationId, page: 1, pageSize: 100 }
+      { locationId }
     )
     return data.agents ?? []
   }
