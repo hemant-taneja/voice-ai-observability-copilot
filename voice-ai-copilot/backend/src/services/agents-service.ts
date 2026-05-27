@@ -166,14 +166,16 @@ export class AgentsService {
     return { kpiConfigId, ghlAgentId }
   }
 
-  async upsertFromGHL(locationId: string, ghlAgents: Array<{ id: string; name: string }>): Promise<number> {
+  async upsertFromGHL(locationId: string, ghlAgents: Array<Record<string, unknown>>): Promise<number> {
     for (const agent of ghlAgents) {
+      const id   = (agent.id ?? agent.agentId ?? agent._id) as string
+      const name = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
       await this.database.query(
         `INSERT INTO agents (location_id, ghl_agent_id, name)
          VALUES ($1, $2, $3)
          ON CONFLICT (location_id, ghl_agent_id) DO UPDATE
          SET name = EXCLUDED.name, updated_at = NOW()`,
-        [locationId, agent.id, agent.name]
+        [locationId, id, name]
       )
     }
     return ghlAgents.length

@@ -52,7 +52,8 @@ agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: 
       },
     })
 
-    const ghlAgents = (data.agents ?? data.data ?? []) as Array<{ id: string; name: string }>
+    const ghlAgents = (data.agents ?? data.data ?? []) as Array<Record<string, unknown>>
+    console.log('[agents/sync] GHL response keys:', Object.keys(data), '| first agent:', JSON.stringify(ghlAgents[0]))
     const synced = await agentsService.upsertFromGHL(locationId, ghlAgents)
 
     res.json({ ok: true, synced })
