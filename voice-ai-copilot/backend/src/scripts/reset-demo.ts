@@ -19,7 +19,7 @@ import * as path from 'path'
 
 dotenv.config({ path: path.join(__dirname, '../../../.env') })
 
-const LOCATION_ID = 'loc-seed-1'
+const LOCATION_ID = process.env.SIMULATE_LOCATION_ID ?? 'loc-seed-1'
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 async function resetDemo() {

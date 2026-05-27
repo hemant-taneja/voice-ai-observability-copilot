@@ -24,30 +24,41 @@ Related files:
    sudo docker compose exec app node dist/scripts/reset-demo.js
    ```
 
-> ⚠️ **Known caveat — locationId is hardcoded for this demo account**
-> The dashboard URL requires `?locationId=loc-seed-1` explicitly. Without it, the app
-> falls back to `demo-location-001` (the old default) and shows no agents.
-> In a real HighLevel installation the locationId is injected by the HL iframe at launch
-> (OAuth install sets it automatically). This fallback will be fixed — it was a conscious
-> trade-off to respect the demo deadline while architectural work continues in parallel.
-> **For the demo, always use the full URL above.**
+> ⚠️ **Demo note — two modes**
+> **Live install mode (preferred):** Install from the HL marketplace → OAuth sets locationId automatically via iframe. Run `simulate-webhook.js` with `SIMULATE_LOCATION_ID=<real-id>` set.
+> **Fallback seed mode:** If install is unreliable on the day, use the seeded URL: `https://voice-agent-copilot.duckdns.org?locationId=loc-seed-1`. Agents are pre-seeded; Sync button will fail (no OAuth token) but skip that beat and go straight to KPI config + simulations.
+> **For the demo, prefer live install mode.** Have the fallback URL ready in a pinned tab.
 
 ---
 
-## Section 1 — Problem Statement + Agent Sync (45 sec)
+## Section 1 — Problem Statement + Install (45 sec)
 
-**[SHOW: Dashboard — 3 agent cards visible, zero calls, empty transcript table]**
+**[SHOW: HighLevel Marketplace — app listing page]**
 
 > *"Every AI voice agent your company runs makes dozens of calls a day. Right now you have no idea if those agents are following the script, handling objections correctly, or making promises that aren't authorised. You find out something went wrong when the customer complains — not in real time, not automatically. This product changes that."*
 
-Point at the three agent cards on screen.
+**[SHOW: Click Install / Connect → OAuth flow completes → redirect to dashboard]**
 
-> *"These agents — Sarah, Mike, Emma — are pulled directly from the HighLevel account's Voice AI roster the moment the app is installed. When an agency installs from the marketplace, the OAuth flow completes, we receive the install webhook from HL, and we immediately call the HL Voice AI API to sync their agent list. Name, script, everything as configured in their HL account — no manual setup. The agency opens the dashboard and their agents are already there."*
+> *"Install takes one OAuth click. The moment it completes we receive the install webhook from HighLevel, mint a location-specific access token, and immediately sync the account's Voice AI agent roster. The agency opens the dashboard and their agents are already there — name, script, everything as configured in HL. Zero manual setup."*
 
-**[Talking point if asked how sync works:]**
-> *"It's a single API call to HighLevel's `/voice-ai/agents` endpoint using the OAuth access token from install. We upsert on `(locationId, ghlAgentId)` so re-installs or refreshes are safe. There's also a manual re-sync endpoint the dashboard can call if they add agents after install."*
+---
 
-> ⚠️ **Demo note:** In this demo the agents are seeded data (not a live HL sync) because the locationId is currently hardcoded to this demo account. In a real installation these would be the account's actual HL Voice AI agents. See the caveat section above.
+## Section 1.5 — Live Agent Sync (30 sec)
+
+> *"And it's not just install-time. If the agency adds a new agent to their HighLevel account after they've already installed — maybe they're spinning up a specialist for a new campaign — they don't need to touch the dashboard config. One button."*
+
+**[SHOW: Switch to HighLevel Voice AI → create a new agent, e.g. "Alex — Insurance Specialist"]**
+
+(Name it something memorable. Script can be a single line — enough to show it comes through.)
+
+**[SHOW: Switch back to the dashboard → click "Sync from HighLevel" in the Agents header]**
+
+Watch the new agent card appear instantly.
+
+> *"That's it. The new agent is in our system, ready to have KPI goals configured and calls analysed against them. No redeployment, no config file, no webhook manually set up."*
+
+**[Talking point if asked how it works:]**
+> *"Single `GET /voice-ai/agents` call to HighLevel using the stored OAuth token. We upsert on `(locationId, ghlAgentId)` — re-syncs are always safe, nothing gets duplicated or overwritten unless HL actually changed something."*
 
 ---
 

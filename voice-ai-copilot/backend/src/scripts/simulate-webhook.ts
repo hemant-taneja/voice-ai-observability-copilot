@@ -34,7 +34,7 @@ const ARG2           = process.argv[3]   // outcome | undefined
 const BATCH_MODE     = ARG1 === 'all'
 const AGENT_GHL_ID   = BATCH_MODE ? 'ghl-ag-1' : (ARG1 ?? 'ghl-ag-1')
 const SCENARIO_TYPE  = (BATCH_MODE ? 'all' : (ARG2 ?? 'pass')) as 'pass' | 'fail' | 'partial' | 'random' | 'all'
-const LOCATION_ID    = 'loc-seed-1'
+const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'loc-seed-1'
 const BATCH_DELAY_MS = 2000  // stagger between batch sends
 
 type Turn = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }

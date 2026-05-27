@@ -168,14 +168,17 @@ export class AgentsService {
 
   async upsertFromGHL(locationId: string, ghlAgents: Array<Record<string, unknown>>): Promise<number> {
     for (const agent of ghlAgents) {
-      const id   = (agent.id ?? agent.agentId ?? agent._id) as string
-      const name = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
+      const id     = (agent.id ?? agent.agentId ?? agent._id) as string
+      const name   = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
+      const script = (agent.script ?? agent.prompt ?? agent.systemPrompt ?? agent.voicePrompt ?? null) as string | null
       await this.database.query(
-        `INSERT INTO agents (location_id, ghl_agent_id, name)
-         VALUES ($1, $2, $3)
+        `INSERT INTO agents (location_id, ghl_agent_id, name, script)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (location_id, ghl_agent_id) DO UPDATE
-         SET name = EXCLUDED.name, updated_at = NOW()`,
-        [locationId, id, name]
+         SET name = EXCLUDED.name,
+             script = COALESCE(EXCLUDED.script, agents.script),
+             updated_at = NOW()`,
+        [locationId, id, name, script]
       )
     }
     return ghlAgents.length

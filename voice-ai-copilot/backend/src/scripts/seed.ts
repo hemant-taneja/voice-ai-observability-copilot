@@ -6,17 +6,20 @@ dotenv.config({ path: path.join(__dirname, '../../../.env') })
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
+const LOCATION_ID = process.env.SEED_LOCATION_ID ?? 'loc-seed-1'
+
 async function seed() {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
 
-    // Clear existing seed data
-    await client.query("DELETE FROM locations WHERE location_id = 'loc-seed-1'")
+    // Clear existing seed data for this location
+    await client.query('DELETE FROM locations WHERE location_id = $1', [LOCATION_ID])
 
     // Location
     await client.query(
-      `INSERT INTO locations (location_id, name) VALUES ('loc-seed-1', 'Demo Agency') ON CONFLICT DO NOTHING`
+      `INSERT INTO locations (location_id, name) VALUES ($1, 'Demo Agency') ON CONFLICT DO NOTHING`,
+      [LOCATION_ID]
     )
 
     // Agents
@@ -29,10 +32,10 @@ async function seed() {
     const agentIds: string[] = []
     for (const a of agents) {
       const r = await client.query(
-        `INSERT INTO agents (location_id, ghl_agent_id, name, script) VALUES ('loc-seed-1', $1, $2, $3)
-         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE SET name = $2
+        `INSERT INTO agents (location_id, ghl_agent_id, name, script) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE SET name = $3
          RETURNING id`,
-        [a.ghl_agent_id, a.name, a.script]
+        [LOCATION_ID, a.ghl_agent_id, a.name, a.script]
       )
       agentIds.push(r.rows[0].id)
     }
@@ -163,11 +166,12 @@ async function seed() {
       // Insert transcript
       const tr = await client.query(
         `INSERT INTO transcripts (agent_id, location_id, ghl_call_id, caller_phone, duration_seconds, turns, raw_payload, status)
-         VALUES ($1, 'loc-seed-1', $2, $3, $4, $5, $6, 'analyzed')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'analyzed')
          ON CONFLICT (ghl_call_id) DO NOTHING
          RETURNING id`,
         [
           agentIds[d.agentIdx],
+          LOCATION_ID,
           d.callId,
           d.phone,
           d.duration,
@@ -199,7 +203,7 @@ async function seed() {
 
     await client.query('COMMIT')
     console.log('✓ Seed data inserted successfully')
-    console.log('  Location: loc-seed-1')
+    console.log(`  Location: ${LOCATION_ID}`)
     console.log('  Agents: 3')
     console.log('  Transcripts: 4 analyzed, 2 pending')
     console.log('  Pass rate: 3/4 (75%)')
