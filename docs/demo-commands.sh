@@ -32,6 +32,10 @@
 AGENT_ID=ghl-ag-1   # ← update this after first sync
 
 
+# ── CLEAR ALL LOCATION DATA (fresh install / troubleshooting) ─
+sudo docker compose exec postgres psql -U postgres -d voice_copilot -c "TRUNCATE locations CASCADE;"
+
+
 # ── STEP 0: Reset before demo ────────────────────────────────
 sudo docker compose exec app node dist/scripts/reset-demo.js
 
