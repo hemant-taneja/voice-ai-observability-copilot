@@ -15,7 +15,7 @@ Related files:
    ssh -L 8080:localhost:8080 hemanttaneja30@35.207.209.250
    ```
 3. Open these browser tabs in advance:
-   - Dashboard: `https://voice-agent-copilot.duckdns.org?locationId=loc-seed-1`
+   - Dashboard: `https://voice-agent-copilot.duckdns.org?locationId=TJkIaqSqj7jectw2dxRx`
    - Temporal UI: `http://localhost:8080`
    - GitHub Actions: repo → Actions tab
    - `docs/architecture.md` — open in a text editor or browser (for Section 6)
@@ -26,7 +26,7 @@ Related files:
 
 > ⚠️ **Demo note — two modes**
 > **Live install mode (preferred):** Install from the HL marketplace → OAuth sets locationId automatically via iframe. Run `simulate-webhook.js` with `SIMULATE_LOCATION_ID=<real-id>` set.
-> **Fallback seed mode:** If install is unreliable on the day, use the seeded URL: `https://voice-agent-copilot.duckdns.org?locationId=loc-seed-1`. Agents are pre-seeded; Sync button will fail (no OAuth token) but skip that beat and go straight to KPI config + simulations.
+> **Fallback seed mode:** If install is unreliable on the day, use the seeded URL: `https://voice-agent-copilot.duckdns.org?locationId=TJkIaqSqj7jectw2dxRx`. Agents are pre-seeded; Sync button will fail (no OAuth token) but skip that beat and go straight to KPI config + simulations.
 > **For the demo, prefer live install mode.** Have the fallback URL ready in a pinned tab.
 
 ---

@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(__dirname, '../../../.env') })
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
-const LOCATION_ID = process.env.SEED_LOCATION_ID ?? 'loc-seed-1'
+const LOCATION_ID = process.env.SEED_LOCATION_ID ?? 'TJkIaqSqj7jectw2dxRx'
 
 async function seed() {
   const client = await pool.connect()

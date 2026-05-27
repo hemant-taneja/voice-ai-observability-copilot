@@ -14,12 +14,22 @@
 
 # =============================================================
 #  DASHBOARD URL  (open in browser before demo)
-#  https://voice-agent-copilot.duckdns.org?locationId=loc-seed-1
+#  https://voice-agent-copilot.duckdns.org?locationId=TJkIaqSqj7jectw2dxRx
 #
-#  ⚠️  The ?locationId=loc-seed-1 param is required.
-#      Without it the app falls back to demo-location-001
-#      and shows no agents. Fix in progress.
+#  Or open via the HighLevel marketplace iframe (preferred for demo)
+#  — locationId is injected automatically in that case.
 # =============================================================
+
+# =============================================================
+#  AGENT GHL ID
+#  After syncing from HL, check which agent ID to use:
+#    sudo docker compose exec app node -e "
+#      const {db} = require('./dist/db/index');
+#      db.query(\"SELECT ghl_agent_id, name FROM agents WHERE location_id='TJkIaqSqj7jectw2dxRx'\").then(r=>{console.log(r.rows);process.exit()})
+#    "
+#  Replace <AGENT_ID> below with the ghl_agent_id of the agent to demo.
+# =============================================================
+AGENT_ID=ghl-ag-1   # ← update this after first sync
 
 
 # ── STEP 0: Reset before demo ────────────────────────────────
@@ -27,15 +37,15 @@ sudo docker compose exec app node dist/scripts/reset-demo.js
 
 
 # ── STEP 1: Simulation — PASS ────────────────────────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 pass
+sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" pass
 
 
 # ── STEP 2: Simulation — FAIL ────────────────────────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 fail
+sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" fail
 
 
 # ── STEP 3: Simulation — PARTIAL (main demo case) ────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 partial
+sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" partial
 
 
 # ── ALL 3 IN ONE GO (alternative, 2s stagger between each) ───

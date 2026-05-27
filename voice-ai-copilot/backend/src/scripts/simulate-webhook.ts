@@ -5,16 +5,17 @@
  * exercising the full pipeline: webhook → Temporal → LLM → SSE.
  *
  * Single shot:
- *   npm run simulate                          # pass case (default)
- *   npm run simulate -- ghl-ag-1 pass        # specific outcome
- *   npm run simulate -- ghl-ag-1 fail
- *   npm run simulate -- ghl-ag-1 partial
+ *   npm run simulate                               # pass case, default agent
+ *   npm run simulate -- <agentGhlId> pass         # specific agent + outcome
+ *   npm run simulate -- <agentGhlId> fail
+ *   npm run simulate -- <agentGhlId> partial
  *
- * Batch mode (fires all 3 cases with a short stagger):
- *   npm run simulate -- all                   # all 3 cases for ghl-ag-1
+ * Batch mode (fires all 3 cases with a 2s stagger):
+ *   npm run simulate -- all                        # all 3 cases, default agent
  *
- * Agent IDs: ghl-ag-1
- * Outcome types: pass, fail, partial
+ * Env vars:
+ *   SIMULATE_LOCATION_ID  — target location  (default: TJkIaqSqj7jectw2dxRx)
+ *   SIMULATE_AGENT_ID     — default agent GHL ID (default: first key in CASES)
  */
 
 import crypto from 'crypto'
@@ -31,10 +32,11 @@ const BASE_URL       = `http://localhost:${PORT}`
 const ARG1           = process.argv[2]   // 'all' | agent-id | undefined
 const ARG2           = process.argv[3]   // outcome | undefined
 
+const DEFAULT_AGENT  = process.env.SIMULATE_AGENT_ID ?? 'ghl-ag-1'
 const BATCH_MODE     = ARG1 === 'all'
-const AGENT_GHL_ID   = BATCH_MODE ? 'ghl-ag-1' : (ARG1 ?? 'ghl-ag-1')
+const AGENT_GHL_ID   = BATCH_MODE ? DEFAULT_AGENT : (ARG1 ?? DEFAULT_AGENT)
 const SCENARIO_TYPE  = (BATCH_MODE ? 'all' : (ARG2 ?? 'pass')) as 'pass' | 'fail' | 'partial' | 'random' | 'all'
-const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'loc-seed-1'
+const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'TJkIaqSqj7jectw2dxRx'
 const BATCH_DELAY_MS = 2000  // stagger between batch sends
 
 type Turn = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }
