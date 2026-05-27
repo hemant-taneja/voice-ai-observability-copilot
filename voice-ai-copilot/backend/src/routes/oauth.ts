@@ -31,7 +31,16 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
       return
     }
 
-    let data: Record<string, unknown>
+    interface GHLTokenResponse {
+      access_token: string
+      refresh_token: string
+      expires_in: number
+      userType: 'Location' | 'Company'
+      locationId?: string
+      companyId?: string
+    }
+
+    let data: GHLTokenResponse
     try {
       const resp = await axios.post(
         `${GHL_BASE}/oauth/token`,
@@ -45,7 +54,7 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
         },
         { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
       )
-      data = resp.data
+      data = resp.data as GHLTokenResponse
     } catch (axiosErr: unknown) {
       const e = axiosErr as { response?: { status: number; data: unknown } }
       console.error('[oauth/callback] GHL token exchange failed:', e.response?.status, JSON.stringify(e.response?.data))
