@@ -42,17 +42,18 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
 
     let data: GHLTokenResponse
     try {
+      const params = new URLSearchParams({
+        client_id:     config.ghlClientId!,
+        client_secret: config.ghlClientSecret!,
+        grant_type:    'authorization_code',
+        code,
+        user_type:     'Location',
+        redirect_uri:  `${config.appUrl}/oauth/callback`,
+      })
       const resp = await axios.post(
         `${GHL_BASE}/oauth/token`,
-        {
-          client_id:     config.ghlClientId,
-          client_secret: config.ghlClientSecret,
-          grant_type:    'authorization_code',
-          code,
-          user_type:     'Location',
-          redirect_uri:  `${config.appUrl}/oauth/callback`,
-        },
-        { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
+        params,
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' } }
       )
       data = resp.data as GHLTokenResponse
     } catch (axiosErr: unknown) {
