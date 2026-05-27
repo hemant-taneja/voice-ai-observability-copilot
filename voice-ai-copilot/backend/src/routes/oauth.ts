@@ -19,7 +19,7 @@ const GHL_BASE = 'https://services.leadconnectorhq.com'
  */
 oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { code } = req.query as { code?: string }
+    const { code, locationId: qsLocationId } = req.query as { code?: string; locationId?: string }
 
     if (!code) {
       res.status(400).send('<h1>Installation failed</h1><p>Missing authorization code.</p>')
@@ -89,7 +89,11 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
              token_expires_at = EXCLUDED.token_expires_at`,
         [`company:${data.companyId}`, data.access_token, data.refresh_token, expiresAt]
       )
-      res.redirect(`${config.appUrl ?? '/'}/?installed=1`)
+      const redirectLocation = qsLocationId ?? data.locationId
+      res.redirect(redirectLocation
+        ? `${config.appUrl ?? '/'}/?locationId=${redirectLocation}&installed=1`
+        : `${config.appUrl ?? '/'}/?installed=1`
+      )
     } else {
       res.status(400).send('<h1>Installation failed</h1><p>Unknown token type received.</p>')
     }
