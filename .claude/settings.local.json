@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/Development/Redacted/HighLevel/voice-ai-copilot/package.json\":*)",
+      "Bash(\"C:/Development/Redacted/HighLevel/voice-ai-copilot/.env.example\":*)",
+      "Bash(\"C:/Development/Redacted/HighLevel/voice-ai-copilot/.env\":*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(test:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:marketplace.gohighlevel.com)",
+      "WebFetch(domain:highlevel.stoplight.io)",
+      "WebFetch(domain:developer.gohighlevel.com)",
+      "WebFetch(domain:help.gohighlevel.com)",
+      "WebSearch",
+      "WebFetch(domain:ideas.gohighlevel.com)",
+      "WebFetch(domain:developers.highlevel.com)",
+      "WebFetch(domain:developers.gohighlevel.com)",
+      "WebFetch(domain:api.gohighlevel.com)"
+    ]
+  }
+}

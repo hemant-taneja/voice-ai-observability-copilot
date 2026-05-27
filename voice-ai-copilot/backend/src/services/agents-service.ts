@@ -166,6 +166,36 @@ export class AgentsService {
     return { kpiConfigId, ghlAgentId }
   }
 
+  async upsertFromGHL(locationId: string, ghlAgents: Array<Record<string, unknown>>): Promise<number> {
+    const incomingIds: string[] = []
+
+    for (const agent of ghlAgents) {
+      const id     = (agent.id ?? agent.agentId ?? agent._id) as string
+      const name   = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
+      const script = (agent.script ?? agent.prompt ?? agent.agentPrompt ?? agent.systemPrompt ?? agent.voicePrompt ?? null) as string | null
+      await this.database.query(
+        `INSERT INTO agents (location_id, ghl_agent_id, name, script)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE
+         SET name = EXCLUDED.name,
+             script = COALESCE(EXCLUDED.script, agents.script),
+             updated_at = NOW()`,
+        [locationId, id, name, script]
+      )
+      incomingIds.push(id)
+    }
+
+    // Remove agents no longer present in HL (cascades to kpi_configs, transcripts, analyses)
+    if (incomingIds.length > 0) {
+      await this.database.query(
+        `DELETE FROM agents WHERE location_id = $1 AND ghl_agent_id <> ALL($2::text[])`,
+        [locationId, incomingIds]
+      )
+    }
+
+    return ghlAgents.length
+  }
+
   async updateScript(agentId: string, locationId: string, script: string): Promise<void> {
     const { rowCount } = await this.database.query(
       'UPDATE agents SET script = $1, updated_at = NOW() WHERE id = $2 AND location_id = $3',

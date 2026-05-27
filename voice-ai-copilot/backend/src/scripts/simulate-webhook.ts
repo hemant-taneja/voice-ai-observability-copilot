@@ -5,16 +5,23 @@
  * exercising the full pipeline: webhook → Temporal → LLM → SSE.
  *
  * Single shot:
- *   npm run simulate                          # random agent, random scenario
- *   npm run simulate -- agent-alpha           # specific agent, random scenario
- *   npm run simulate -- agent-alpha pass      # specific agent, specific outcome
+ *   npm run simulate                               # pass case, default agent (ghl-ag-1)
+ *   npm run simulate -- <agentGhlId> pass         # specific agent + outcome
+ *   npm run simulate -- <agentGhlId> fail
+ *   npm run simulate -- <agentGhlId> partial
  *
- * Batch mode (fires every scenario with a short stagger):
- *   npm run simulate -- all                   # all scenarios for all agents
- *   npm run simulate -- all agent-alpha       # all scenarios for one agent
+ * Batch mode (fires all 3 cases for an agent with a 2s stagger):
+ *   npm run simulate -- all                        # all 3 cases for default agent
+ *   npm run simulate -- ghl-ag-2 all              # all 3 cases for Marcus
  *
- * Agent IDs: agent-alpha, agent-beta, agent-gamma
- * Outcome types: pass, fail, partial
+ * Env vars:
+ *   SIMULATE_LOCATION_ID  — target location  (default: TJkIaqSqj7jectw2dxRx)
+ *   SIMULATE_AGENT_ID     — default agent GHL ID (default: ghl-ag-1)
+ *
+ * Agents (from seed):
+ *   ghl-ag-1  Aria — Travel Booking Specialist
+ *   ghl-ag-2  Marcus — FlowCRM Sales Specialist
+ *   ghl-ag-3  Sophie — Dental Care Coordinator
  */
 
 import crypto from 'crypto'
@@ -28,302 +35,292 @@ const WEBHOOK_SECRET = process.env.GHL_WEBHOOK_SECRET ?? ''
 const PORT           = process.env.PORT ?? '3000'
 const BASE_URL       = `http://localhost:${PORT}`
 
-const ARG1           = process.argv[2]   // 'all' | agent-id | undefined
-const ARG2           = process.argv[3]   // agent-id (when arg1=all) | outcome | undefined
+const ARG1           = process.argv[2]
+const ARG2           = process.argv[3]
 
-const BATCH_MODE     = ARG1 === 'all'
-const AGENT_GHL_ID   = BATCH_MODE
-  ? (ARG2 ?? 'all')
-  : (ARG1 ?? pickRandom(['agent-alpha', 'agent-beta', 'agent-gamma']))
-const SCENARIO_TYPE  = (BATCH_MODE ? 'all' : (ARG2 ?? 'random')) as 'pass' | 'fail' | 'partial' | 'random' | 'all'
-const LOCATION_ID    = 'demo-location-001'
-const BATCH_DELAY_MS = 1500  // stagger between batch sends
+const DEFAULT_AGENT  = process.env.SIMULATE_AGENT_ID ?? 'ghl-ag-1'
+const BATCH_MODE     = ARG1 === 'all' || ARG2 === 'all'
+const AGENT_GHL_ID   = (ARG1 === 'all' || !ARG1) ? DEFAULT_AGENT : ARG1
+const SCENARIO_TYPE  = BATCH_MODE ? 'all' : ((ARG2 ?? 'pass') as 'pass' | 'fail' | 'partial' | 'random' | 'all')
+const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'TJkIaqSqj7jectw2dxRx'
+const BATCH_DELAY_MS = 2000
 
-type Turn = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }
+type Turn     = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }
 type TestCase = { label: string; outcome: 'pass' | 'fail' | 'partial'; turns: Turn[] }
 
-// ─────────────────────────────────────────────────────────────
-//  TEST CASES PER AGENT
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  ghl-ag-1 | Aria — Travel Booking Specialist
+//
+//  Script: Confirm destination + dates. Offer flight + hotel bundle.
+//          Secure booking commitment and payment intent.
+//
+//  KPIs:
+//    Confirm Destination & Dates  (0.40) — specific destination and dates obtained
+//    Present Bundle Upsell        (0.30) — flight + hotel bundle proactively offered
+//    Secure Booking Commitment    (0.30) — prospect commits to book / gives payment intent
+//
+//  Cases:
+//    PASS    — Bali anniversary trip: destination + dates confirmed, Bali Bliss Bundle
+//              offered and accepted, deposit commitment secured on the call
+//    FAIL    — Maldives inquiry: agent is vague, never pins down dates, no bundle
+//              mentioned, ends with "someone will call you back" — no booking
+//    PARTIAL — Paris couple's trip: destination + dates confirmed, booking committed,
+//              DEVIATION: agent recommends Solo Explorer Pass (solo product) for a couple
+//              instead of the Couples Getaway Bundle; also fails to collect payment
+//              on the call — sends a link instead
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CASES: Record<string, TestCase[]> = {
 
-  // ── Sunrise Dental Booker ──────────────────────────────────
-  'agent-alpha': [
+  'ghl-ag-1': [
+
+    // ── PASS ─────────────────────────────────────────────────
     {
-      label: 'PASS — New patient booked, insurance confirmed',
+      label: 'PASS — Bali anniversary: destination+dates confirmed, bundle upsold, deposit committed',
       outcome: 'pass',
       turns: [
-        { speaker: 'agent', text: "Hi, this is Sarah calling from Sunrise Dental. Am I speaking with Michael today?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yes, this is Michael.", timestamp_ms: 2200 },
-        { speaker: 'agent', text: "Great! I'm reaching out because you expressed interest in our new patient special — a comprehensive exam, X-rays, and cleaning for $99. We're currently accepting new patients and I wanted to get you scheduled.", timestamp_ms: 3800 },
-        { speaker: 'user',  text: "Oh right, yeah I did see that. I've been meaning to find a new dentist.", timestamp_ms: 9500 },
-        { speaker: 'agent', text: "Perfect timing then! Before we lock in a time, could you let me know which dental insurance you have? We accept Delta Dental, Cigna, Aetna, MetLife, and most major plans.", timestamp_ms: 11200 },
-        { speaker: 'user',  text: "I have Delta Dental through my employer.", timestamp_ms: 16800 },
-        { speaker: 'agent', text: "Excellent, we're in-network with Delta Dental so you'll have great coverage. We have openings on Tuesday at 9 AM or Thursday at 3 PM — which works better for you?", timestamp_ms: 18500 },
-        { speaker: 'user',  text: "Thursday at 3 works for me.", timestamp_ms: 23400 },
-        { speaker: 'agent', text: "Perfect! I've got you down for Thursday at 3 PM at our downtown office. We'll send a confirmation text and a reminder 24 hours before. Is the number I'm calling you on the best to reach you?", timestamp_ms: 25100 },
-        { speaker: 'user',  text: "Yes, that's my cell.", timestamp_ms: 30200 },
-        { speaker: 'agent', text: "Great, you're all set Michael. We look forward to seeing you Thursday!", timestamp_ms: 31800 },
+        { speaker: 'agent', text: "Hi, this is Aria from Wanderlust Travel. Am I speaking with Priya?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yes, this is Priya.", timestamp_ms: 2200 },
+        { speaker: 'agent', text: "Hi Priya! I saw you submitted a travel inquiry. I'd love to help you plan your next trip. Where are you thinking of going?", timestamp_ms: 3800 },
+        { speaker: 'user',  text: "We're thinking Bali. My husband and I are celebrating our anniversary in March.", timestamp_ms: 7500 },
+        { speaker: 'agent', text: "Bali is a perfect anniversary destination! Do you have specific dates in mind?", timestamp_ms: 12100 },
+        { speaker: 'user',  text: "We're looking at March 15th through the 22nd — about a week.", timestamp_ms: 15400 },
+        { speaker: 'agent', text: "Wonderful — March 15 to 22, 7 nights. That's peak dry season in Bali. Are you just looking at flights, or would a complete package — flights and resort — be of interest?", timestamp_ms: 18700 },
+        { speaker: 'user',  text: "A package sounds great, honestly. Less to manage.", timestamp_ms: 25200 },
+        { speaker: 'agent', text: "Perfect. I'd recommend our Bali Bliss Bundle — round-trip flights from New York, 7 nights at the Ubud Jungle Resort, daily breakfast, and airport transfers. It's our most popular couples package. We can also add a complimentary sunset dinner this month.", timestamp_ms: 27000 },
+        { speaker: 'user',  text: "Oh wow, that sounds incredible. Let's do it.", timestamp_ms: 36800 },
+        { speaker: 'agent', text: "Excellent! I'll lock in availability for March 15 to 22 for two. To hold the booking I'll need a $500 deposit. Can I take your card details now?", timestamp_ms: 38600 },
+        { speaker: 'user',  text: "Yes, absolutely. Let me grab my card.", timestamp_ms: 44300 },
+        { speaker: 'agent', text: "Perfect — you're going to have an incredible anniversary in Bali, Priya!", timestamp_ms: 46100 },
       ],
     },
+
+    // ── FAIL ─────────────────────────────────────────────────
     {
-      label: 'PASS — Objection about cost handled, appointment booked',
-      outcome: 'pass',
-      turns: [
-        { speaker: 'agent', text: "Hi, this is Jessica from Sunrise Dental. Am I speaking with Amy?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yes.", timestamp_ms: 1800 },
-        { speaker: 'agent', text: "Hi Amy! I'm calling because you filled out a form about our new patient special — a comprehensive exam, X-rays, and cleaning for $99. I wanted to get you scheduled.", timestamp_ms: 3000 },
-        { speaker: 'user',  text: "I'm not sure I can afford dental care right now honestly.", timestamp_ms: 8900 },
-        { speaker: 'agent', text: "Completely understand. That's exactly why we created the $99 new patient special — it covers everything upfront with no surprises. And if you have insurance, it may cover part or all of it.", timestamp_ms: 10700 },
-        { speaker: 'user',  text: "I actually have Cigna through work.", timestamp_ms: 17200 },
-        { speaker: 'agent', text: "Perfect, we're in-network with Cigna. Your out-of-pocket would likely be minimal or zero. We have Monday at 10 AM or Wednesday at 2 PM available. Which would you prefer?", timestamp_ms: 18900 },
-        { speaker: 'user',  text: "Monday at 10 sounds good.", timestamp_ms: 25100 },
-        { speaker: 'agent', text: "Wonderful! You're booked for Monday at 10 AM. We'll send you a confirmation and reminder. Is this the best number for you?", timestamp_ms: 27000 },
-        { speaker: 'user',  text: "Yes, perfect.", timestamp_ms: 32300 },
-      ],
-    },
-    {
-      label: 'FAIL — Patient not booked, insurance not qualified',
+      label: 'FAIL — Maldives: agent vague, no dates, no bundle offered, no booking',
       outcome: 'fail',
       turns: [
-        { speaker: 'agent', text: "Hi, I'm calling from Sunrise Dental about the new patient offer.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Oh, I'm kind of busy right now.", timestamp_ms: 2800 },
-        { speaker: 'agent', text: "I understand. I just wanted to let you know about our $99 special.", timestamp_ms: 4500 },
-        { speaker: 'user',  text: "Can you call me back another time?", timestamp_ms: 7900 },
-        { speaker: 'agent', text: "Of course, no problem. I'll try you again later. Have a great day!", timestamp_ms: 9600 },
-        { speaker: 'user',  text: "Thanks, bye.", timestamp_ms: 12100 },
+        { speaker: 'agent', text: "Hi, is this James? This is Aria from Wanderlust Travel.", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yeah, that's me.", timestamp_ms: 2800 },
+        { speaker: 'agent', text: "Hi James! I'm calling about your travel inquiry. What destination were you thinking?", timestamp_ms: 4200 },
+        { speaker: 'user',  text: "The Maldives. I've always wanted to go.", timestamp_ms: 7600 },
+        { speaker: 'agent', text: "Oh, the Maldives is beautiful. There are a lot of options there.", timestamp_ms: 10900 },
+        { speaker: 'user',  text: "Great. So what do you have available? I'm thinking two weeks.", timestamp_ms: 13500 },
+        { speaker: 'agent', text: "Two weeks is a good amount of time. It depends on a lot of factors — the time of year, which atoll you prefer, your budget...", timestamp_ms: 17200 },
+        { speaker: 'user',  text: "I'm pretty flexible. Can you give me a rough idea?", timestamp_ms: 23100 },
+        { speaker: 'agent', text: "It varies quite a bit — could range from $2,000 to $10,000 depending on the resort. I think someone from our Maldives specialist team would be better placed to help you. Can I have them call you back?", timestamp_ms: 26400 },
+        { speaker: 'user',  text: "I mean... sure, I guess.", timestamp_ms: 34800 },
+        { speaker: 'agent', text: "Great, I'll pass your details along. They'll be in touch soon. Thanks James!", timestamp_ms: 37200 },
+        { speaker: 'user',  text: "Okay. Bye.", timestamp_ms: 41500 },
       ],
     },
+
+    // ── PARTIAL ───────────────────────────────────────────────
     {
-      label: 'PARTIAL — Insurance confirmed but open time slot not offered (missed opportunity)',
+      label: 'PARTIAL — Paris couple: dates confirmed, booking intent secured, wrong package (Solo not Couples) + no payment collected',
       outcome: 'partial',
       turns: [
-        { speaker: 'agent', text: "Hi, calling from Sunrise Dental. Is this Tom?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yeah, speaking.", timestamp_ms: 2100 },
-        { speaker: 'agent', text: "Hi Tom! I'm reaching out about our new patient special — $99 for a full exam, X-rays, and cleaning.", timestamp_ms: 3600 },
-        { speaker: 'user',  text: "That sounds decent. I do need to find a dentist.", timestamp_ms: 8400 },
-        { speaker: 'agent', text: "Great! Do you have dental insurance?", timestamp_ms: 10200 },
-        { speaker: 'user',  text: "I have Aetna.", timestamp_ms: 12900 },
-        { speaker: 'agent', text: "We accept Aetna, great. So just give us a call back when you're ready to schedule and we can get you in.", timestamp_ms: 14600 },
-        { speaker: 'user',  text: "Okay, I'll do that.", timestamp_ms: 20100 },
-        { speaker: 'agent', text: "Sounds great, have a good one!", timestamp_ms: 21800 },
+        { speaker: 'agent', text: "Hi, this is Aria from Wanderlust Travel. Am I speaking with David?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yes, hi Aria.", timestamp_ms: 2400 },
+        { speaker: 'agent', text: "Hi David! I understand you're planning a trip. What destination did you have in mind?", timestamp_ms: 3900 },
+        { speaker: 'user',  text: "Paris. My girlfriend and I are thinking June 10th to the 17th.", timestamp_ms: 7800 },
+        { speaker: 'agent', text: "Paris in June is gorgeous — June 10 to 17, 7 nights. Are you both looking for a package deal, flights and hotel together?", timestamp_ms: 12100 },
+        { speaker: 'user',  text: "Yes, that would be the easiest.", timestamp_ms: 17300 },
+        { speaker: 'agent', text: "Absolutely. For Paris I'd recommend our Solo City Explorer Pass — it includes a round-trip flight and a centrally located boutique hotel. It's very popular and great value.", timestamp_ms: 19100 },
+        { speaker: 'user',  text: "Isn't that a solo package? We're traveling as a couple.", timestamp_ms: 25600 },
+        { speaker: 'agent', text: "Oh yes, but it works for two — you'd just book two of them. It comes out to a great rate either way.", timestamp_ms: 28900 },
+        { speaker: 'user',  text: "Hmm, okay. If you say so. What's the total?", timestamp_ms: 33200 },
+        { speaker: 'agent', text: "For two Solo Explorer passes in June, you're looking at about $2,800 each — so $5,600 together.", timestamp_ms: 36500 },
+        { speaker: 'user',  text: "That seems fine. How do we proceed?", timestamp_ms: 41800 },
+        { speaker: 'agent', text: "I'll send you an email with all the details and a booking link — just fill it out at your convenience!", timestamp_ms: 44200 },
+        { speaker: 'user',  text: "Sounds good. Thanks.", timestamp_ms: 49600 },
       ],
     },
+
+  ],
+
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  ghl-ag-2 | Marcus — FlowCRM Sales Specialist
+  //
+  //  Script: Lead with discovery to uncover operational pain. Present FlowCRM
+  //          pipeline automation as the solution. Always close for a 14-day
+  //          free trial or a scheduled demo call.
+  //
+  //  KPIs:
+  //    Uncover Pain Point     (0.30) — specific operational problem identified
+  //    Present Product Fit    (0.40) — FlowCRM features connected to stated pain
+  //    Close for Trial/Demo   (0.30) — 14-day free trial or demo call secured
+  //
+  //  Cases:
+  //    PASS    — Spreadsheet chaos: lost follow-ups uncovered, pipeline automation
+  //              presented as solution, 14-day free trial (no CC) closed on the call
+  //    FAIL    — Feature dump: agent launches into 47-integration pitch with zero
+  //              discovery; prospect confused, no connection to pain, no close
+  //    PARTIAL — Right discovery, right fit, wrong close: pain found (inconsistent
+  //              follow-ups), FlowCRM sequences presented, but agent books "a call
+  //              next week" instead of closing for the free trial — prospect was ready
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  'ghl-ag-2': [
+
+    // ── PASS ─────────────────────────────────────────────────
     {
-      label: 'PARTIAL — Appointment booked but insurance never qualified (missed opportunity)',
-      outcome: 'partial',
+      label: 'PASS — Spreadsheet pain uncovered, pipeline automation fit presented, 14-day trial closed',
+      outcome: 'pass',
       turns: [
-        { speaker: 'agent', text: "Hi, this is Sarah from Sunrise Dental. Am I speaking with Rachel?", timestamp_ms: 0 },
+        { speaker: 'agent', text: "Hi, this is Marcus from FlowCRM. Am I speaking with Rachel?", timestamp_ms: 0 },
         { speaker: 'user',  text: "Yes, that's me.", timestamp_ms: 2100 },
-        { speaker: 'agent', text: "Hi Rachel! I'm calling about our new patient special — a comprehensive exam, X-rays, and cleaning for $99. We'd love to get you scheduled.", timestamp_ms: 3500 },
-        { speaker: 'user',  text: "Oh that sounds good, I've been putting off going to the dentist.", timestamp_ms: 9200 },
-        { speaker: 'agent', text: "We have availability on Monday at 11 AM or Wednesday at 2 PM — which works better for you?", timestamp_ms: 11000 },
-        { speaker: 'user',  text: "Monday at 11 works great.", timestamp_ms: 15800 },
-        { speaker: 'agent', text: "Perfect! You're booked for Monday at 11 AM. We'll send a confirmation text. Is this the best number?", timestamp_ms: 17400 },
-        { speaker: 'user',  text: "Yes, that's fine.", timestamp_ms: 22100 },
-        { speaker: 'agent', text: "Great, see you Monday!", timestamp_ms: 23600 },
+        { speaker: 'agent', text: "Hi Rachel! Quick question to start — what does your current lead management process look like today?", timestamp_ms: 3700 },
+        { speaker: 'user',  text: "Honestly, it's a mess. We use spreadsheets and my reps keep dropping the ball on follow-ups. We probably lost three deals last month because no one followed up in time.", timestamp_ms: 7400 },
+        { speaker: 'agent', text: "That's a really costly problem. So if I'm hearing you right — it's not a lack of leads, it's follow-up consistency and visibility into where things stand?", timestamp_ms: 14200 },
+        { speaker: 'user',  text: "Exactly. I have no idea which rep is working which lead unless I physically ask them.", timestamp_ms: 19500 },
+        { speaker: 'agent', text: "That is precisely the problem FlowCRM was built to solve. Our pipeline automation assigns leads to reps automatically, sets follow-up reminders at defined intervals, and gives you a real-time dashboard showing every deal's status — so you're never in the dark again.", timestamp_ms: 22100 },
+        { speaker: 'user',  text: "That sounds exactly like what we need. How much does it cost?", timestamp_ms: 30800 },
+        { speaker: 'agent', text: "Plans start at $49 per user per month. But before you commit to anything, why not try it risk-free? We have a 14-day free trial — no credit card required. You could have your team set up and running by end of this week.", timestamp_ms: 33500 },
+        { speaker: 'user',  text: "That sounds easy. Yeah, let's do the trial.", timestamp_ms: 41200 },
+        { speaker: 'agent', text: "Perfect! I'll send the signup link to your email right now. You'll be up and running in about 10 minutes.", timestamp_ms: 43600 },
+        { speaker: 'user',  text: "Great. Thanks Marcus.", timestamp_ms: 48900 },
       ],
     },
+
+    // ── FAIL ─────────────────────────────────────────────────
     {
-      label: 'FAIL — Patient becomes aggressive and threatening, escalation required',
+      label: 'FAIL — Feature dump with zero discovery; prospect confused, no pain connected, no close',
       outcome: 'fail',
       turns: [
-        { speaker: 'agent', text: "Hi, calling from Sunrise Dental about our new patient offer.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Why do you keep calling me? I've told you people to stop!", timestamp_ms: 2400 },
-        { speaker: 'agent', text: "I apologize for the inconvenience. I just wanted to share our $99 new patient special.", timestamp_ms: 4200 },
-        { speaker: 'user',  text: "I don't care about your special. If you call me again I'm reporting you to the FTC and I'll sue your company. Stop calling!", timestamp_ms: 7100 },
-        { speaker: 'agent', text: "I understand you're upset. Let me just explain the offer quickly—", timestamp_ms: 13600 },
-        { speaker: 'user',  text: "Are you serious right now? I just said I'm going to sue you and you're still pitching me? This is harassment!", timestamp_ms: 16200 },
-        { speaker: 'agent', text: "I'll note your preference. Have a good day.", timestamp_ms: 21900 },
+        { speaker: 'agent', text: "Hi, is this Tom? I'm Marcus from FlowCRM.", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yeah, what's this about?", timestamp_ms: 2700 },
+        { speaker: 'agent', text: "Hi Tom! I wanted to tell you about FlowCRM — it has 47 native integrations, AI-powered lead scoring, automated drip sequences, a built-in dialer, and our new GPT-based email composer. It's really the all-in-one solution for sales teams.", timestamp_ms: 4300 },
+        { speaker: 'user',  text: "I'm not sure what problem you're solving for me.", timestamp_ms: 12800 },
+        { speaker: 'agent', text: "Right, so FlowCRM integrates with Salesforce, HubSpot, Gmail, Outlook, Slack — basically everything. And the AI scoring tells you which leads to prioritize.", timestamp_ms: 15200 },
+        { speaker: 'user',  text: "We're a five-person team. I don't think we need all that.", timestamp_ms: 22600 },
+        { speaker: 'agent', text: "Oh it scales down too! We have plans for small teams starting at $49 per user.", timestamp_ms: 25800 },
+        { speaker: 'user',  text: "I don't know... I'm not really seeing why we'd need this. We're doing okay.", timestamp_ms: 29400 },
+        { speaker: 'agent', text: "Okay, well if you ever want to chat, feel free to visit flowcrm.io. Thanks for your time Tom.", timestamp_ms: 33100 },
+        { speaker: 'user',  text: "Sure. Bye.", timestamp_ms: 37800 },
       ],
     },
+
+    // ── PARTIAL ───────────────────────────────────────────────
+    {
+      label: 'PARTIAL — Discovery done, fit presented, DEVIATION: closes for a call next week instead of 14-day free trial',
+      outcome: 'partial',
+      turns: [
+        { speaker: 'agent', text: "Hi, this is Marcus from FlowCRM. Is this Natalie?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yes, speaking.", timestamp_ms: 2300 },
+        { speaker: 'agent', text: "Hi Natalie! I saw you checked out our website. I'm curious — what's the biggest friction point in your sales process right now?", timestamp_ms: 3900 },
+        { speaker: 'user',  text: "Our reps are totally inconsistent. Some follow up religiously, others let hot leads go cold for a week. It's really frustrating.", timestamp_ms: 8500 },
+        { speaker: 'agent', text: "That follow-up inconsistency is a silent revenue killer. What if your CRM automatically sent a follow-up email or SMS to every lead at exactly the right interval — no matter which rep it's assigned to?", timestamp_ms: 14200 },
+        { speaker: 'user',  text: "That would honestly solve so much.", timestamp_ms: 21600 },
+        { speaker: 'agent', text: "That's exactly what FlowCRM's automated sequence engine does. You set the cadence once, and it fires for every lead, every time — no rep discretion involved.", timestamp_ms: 24100 },
+        { speaker: 'user',  text: "Okay, I'm definitely interested. What's the next step?", timestamp_ms: 31800 },
+        { speaker: 'agent', text: "Let's schedule a 30-minute call next week where I can walk you through the platform and answer questions from your team. Does Tuesday or Wednesday work?", timestamp_ms: 34500 },
+        { speaker: 'user',  text: "Sure, Wednesday works.", timestamp_ms: 41200 },
+        { speaker: 'agent', text: "Great, I'll send a calendar invite to your email. Looking forward to it, Natalie!", timestamp_ms: 43700 },
+        { speaker: 'user',  text: "Thanks Marcus.", timestamp_ms: 48100 },
+      ],
+    },
+
   ],
 
-  // ── Summit RE Qualifier ────────────────────────────────────
-  'agent-beta': [
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  ghl-ag-3 | Sophie — Dental Care Coordinator
+  //
+  //  Script: Book new patient appointments for the $99 special. Verify insurance
+  //          in-network status — approved carriers: Delta Dental, Cigna, Aetna,
+  //          MetLife. Address cost concerns. Always confirm callback number.
+  //
+  //  KPIs:
+  //    Book Appointment           (0.50) — specific date and time confirmed
+  //    Verify Insurance Correctly (0.30) — only confirm in-network if carrier is
+  //                                        Delta Dental, Cigna, Aetna, or MetLife
+  //    Confirm Callback Number    (0.20) — explicitly asks "Is this the best
+  //                                        number to reach you?" before closing
+  //
+  //  Cases:
+  //    PASS    — Aetna verified (in-network), Tuesday 2 PM booked, callback confirmed
+  //    FAIL    — UnitedHealthcare question stumps agent; agent says "I'll check and
+  //              call you back" — call ends without a booking
+  //    PARTIAL — DEVIATION 1: agent confirms Humana is in-network (it is NOT);
+  //              appointment booked but patient will arrive with wrong coverage
+  //              expectation. DEVIATION 2: call closed without asking for callback.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  'ghl-ag-3': [
+
+    // ── PASS ─────────────────────────────────────────────────
     {
-      label: 'PASS — Budget, timeline, location all qualified',
+      label: 'PASS — Aetna verified in-network, Tuesday 2 PM booked, callback number confirmed',
       outcome: 'pass',
       turns: [
-        { speaker: 'agent', text: "Hi, this is Marcus with Summit Real Estate. You recently filled out a form about properties in the area — do you have a couple minutes?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Sure, yeah.", timestamp_ms: 3800 },
-        { speaker: 'agent', text: "To make sure I connect you with the right properties, what's your target purchase budget? Are you thinking under $500K, $500K to $800K, or above $800K?", timestamp_ms: 5400 },
-        { speaker: 'user',  text: "Probably in the $600K to $750K range.", timestamp_ms: 11200 },
-        { speaker: 'agent', text: "That's a solid range with a lot of great inventory right now. Are you looking to move in the next 30 to 60 days, or is this more of a 3 to 6 month search?", timestamp_ms: 13000 },
-        { speaker: 'user',  text: "We'd ideally like to be in by summer, so maybe 60 to 90 days.", timestamp_ms: 19700 },
-        { speaker: 'agent', text: "Perfect, that's very workable. Any specific neighborhoods or school districts on your list?", timestamp_ms: 22400 },
-        { speaker: 'user',  text: "We want to stay in the Westfield or Lakeview area, ideally in the Lincoln school district.", timestamp_ms: 26800 },
-        { speaker: 'agent', text: "Great choices — we have several listings there right now. Have you been pre-approved with a lender yet?", timestamp_ms: 32100 },
-        { speaker: 'user',  text: "Yes, we got pre-approved last week for up to $780K.", timestamp_ms: 37500 },
-        { speaker: 'agent', text: "Excellent. I'd love to set up a 15-minute call with one of our buyer specialists to walk you through matching properties. Would Wednesday morning or Friday afternoon work?", timestamp_ms: 39800 },
-        { speaker: 'user',  text: "Wednesday morning is fine.", timestamp_ms: 46200 },
-        { speaker: 'agent', text: "Perfect, I'll get that set up and send you a calendar invite. Looking forward to finding your home!", timestamp_ms: 48100 },
+        { speaker: 'agent', text: "Hi, this is Sophie from Bright Smile Dental. Am I speaking with Karen?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yes, this is Karen.", timestamp_ms: 2100 },
+        { speaker: 'agent', text: "Hi Karen! I'm calling about our new patient special — a comprehensive exam, full X-rays, and a professional cleaning for $99. I'd love to get you scheduled. Do you have a few minutes?", timestamp_ms: 3700 },
+        { speaker: 'user',  text: "Sure. I've been meaning to find a dentist since I moved here.", timestamp_ms: 10200 },
+        { speaker: 'agent', text: "Perfect timing! Can I ask which dental insurance you have? I want to make sure I check your coverage.", timestamp_ms: 13600 },
+        { speaker: 'user',  text: "I have Aetna through my work.", timestamp_ms: 17900 },
+        { speaker: 'agent', text: "Great news — we're in-network with Aetna, so your out-of-pocket for the $99 special will likely be minimal or even zero depending on your specific plan.", timestamp_ms: 20400 },
+        { speaker: 'user',  text: "Oh, that's reassuring. I was worried about hidden costs.", timestamp_ms: 27100 },
+        { speaker: 'agent', text: "Totally understandable — no surprises here. The $99 covers everything in that visit. We have Tuesday at 2 PM or Thursday at 11 AM open. Which works better for you?", timestamp_ms: 30500 },
+        { speaker: 'user',  text: "Tuesday at 2 PM works perfectly.", timestamp_ms: 37200 },
+        { speaker: 'agent', text: "Wonderful! You're confirmed for Tuesday at 2 PM at our downtown location. We'll text you a reminder the day before. And is this the best number to reach you at?", timestamp_ms: 39800 },
+        { speaker: 'user',  text: "Yes, this is my cell — best way to reach me.", timestamp_ms: 46300 },
+        { speaker: 'agent', text: "Perfect. We look forward to meeting you Tuesday, Karen!", timestamp_ms: 48900 },
       ],
     },
+
+    // ── FAIL ─────────────────────────────────────────────────
     {
-      label: 'FAIL — No qualification information obtained',
+      label: 'FAIL — UnitedHealthcare question stumps agent; no answer given, no booking made',
       outcome: 'fail',
       turns: [
-        { speaker: 'agent', text: "Hi, Summit Real Estate here. You submitted a form about homes in the area.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Oh yeah, I was just browsing honestly. Not really serious yet.", timestamp_ms: 3200 },
-        { speaker: 'agent', text: "I understand, no pressure at all. Just wanted to reach out. Feel free to check our website for listings whenever you're ready.", timestamp_ms: 6400 },
-        { speaker: 'user',  text: "Sure, I'll keep that in mind.", timestamp_ms: 11800 },
-        { speaker: 'agent', text: "Great, have a wonderful day!", timestamp_ms: 13500 },
+        { speaker: 'agent', text: "Hi, this is Sophie from Bright Smile Dental. May I speak with Brian?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yeah, this is Brian.", timestamp_ms: 2600 },
+        { speaker: 'agent', text: "Hi Brian! I'm reaching out about our new patient special — exam, X-rays, and cleaning for $99. Are you currently looking for a new dentist?", timestamp_ms: 4200 },
+        { speaker: 'user',  text: "Actually yeah. But my main question is whether you take my insurance — I have UnitedHealthcare Dental.", timestamp_ms: 9800 },
+        { speaker: 'agent', text: "Hmm, let me think... Actually I'm not 100% sure whether we're in-network with UnitedHealthcare. I'd have to check with our billing department.", timestamp_ms: 14500 },
+        { speaker: 'user',  text: "You don't know your own insurance list?", timestamp_ms: 21300 },
+        { speaker: 'agent', text: "I'm sorry, I don't want to give you wrong information. Can I have our billing team call you back with the answer?", timestamp_ms: 23700 },
+        { speaker: 'user',  text: "If you don't know that basic thing, I'm not really inspired with confidence. I'll probably just find someone else.", timestamp_ms: 29400 },
+        { speaker: 'agent', text: "I completely understand. I'm really sorry I couldn't be more helpful today, Brian.", timestamp_ms: 34200 },
+        { speaker: 'user',  text: "Alright. Thanks anyway.", timestamp_ms: 38600 },
       ],
     },
+
+    // ── PARTIAL ───────────────────────────────────────────────
     {
-      label: 'PARTIAL — Budget qualified, timeline missed, location not captured',
+      label: 'PARTIAL — Monday 11 AM booked, DEVIATION 1: Humana falsely confirmed in-network, DEVIATION 2: no callback number asked',
       outcome: 'partial',
       turns: [
-        { speaker: 'agent', text: "Hi, Marcus from Summit Real Estate. You filled out a form — do you have a minute?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yeah sure.", timestamp_ms: 3100 },
-        { speaker: 'agent', text: "To help find the right match, what's your target budget range?", timestamp_ms: 4800 },
-        { speaker: 'user',  text: "Somewhere around $550K to $650K.", timestamp_ms: 9600 },
-        { speaker: 'agent', text: "That's a great range. We have some wonderful inventory at that price point. Let me have one of our agents pull together some listings for you and send them over.", timestamp_ms: 11400 },
-        { speaker: 'user',  text: "That would be great, thank you.", timestamp_ms: 18700 },
-        { speaker: 'agent', text: "What email should I use?", timestamp_ms: 20300 },
-        { speaker: 'user',  text: "It's john.doe@email.com.", timestamp_ms: 22900 },
-        { speaker: 'agent', text: "Perfect, I'll have those over to you shortly!", timestamp_ms: 25100 },
+        { speaker: 'agent', text: "Hi, this is Sophie from Bright Smile Dental. Am I speaking with Amy?", timestamp_ms: 0 },
+        { speaker: 'user',  text: "Yes, that's me.", timestamp_ms: 2100 },
+        { speaker: 'agent', text: "Hi Amy! I'm calling about our new patient special — a comprehensive exam, X-rays, and cleaning for $99. I'd love to get you in!", timestamp_ms: 3500 },
+        { speaker: 'user',  text: "That sounds good. I have Humana dental insurance — do you take that?", timestamp_ms: 9200 },
+        { speaker: 'agent', text: "Yes, absolutely — we accept Humana, so you should be fully covered. No out-of-pocket cost at all!", timestamp_ms: 13800 },
+        { speaker: 'user',  text: "Oh perfect, that makes it an easy yes.", timestamp_ms: 18500 },
+        { speaker: 'agent', text: "Wonderful! We have Monday at 11 AM or Wednesday at 2 PM available. Which works better for you?", timestamp_ms: 20300 },
+        { speaker: 'user',  text: "Monday at 11 AM sounds perfect.", timestamp_ms: 24900 },
+        { speaker: 'agent', text: "You are all set for Monday at 11 AM! We will send a confirmation text. We look forward to seeing you, Amy — have a great day!", timestamp_ms: 26600 },
+        { speaker: 'user',  text: "Thanks Sophie, see you then!", timestamp_ms: 31200 },
       ],
     },
-    {
-      label: 'PARTIAL — Agent promises non-existent commission waiver (script deviation)',
-      outcome: 'partial',
-      turns: [
-        { speaker: 'agent', text: "Hi, Marcus from Summit Real Estate. You filled out a form about properties — do you have a minute?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Sure, yeah.", timestamp_ms: 3200 },
-        { speaker: 'agent', text: "Great. What's your target budget range?", timestamp_ms: 4800 },
-        { speaker: 'user',  text: "Around $500K to $600K, but I'm worried about agent commissions on top of that.", timestamp_ms: 9500 },
-        { speaker: 'agent', text: "Actually, for buyers in your range we're currently waiving our buyer's commission entirely — so there's no cost to you at all.", timestamp_ms: 13200 },
-        { speaker: 'user',  text: "Oh wow, really? That's great, I didn't know that was possible.", timestamp_ms: 19100 },
-        { speaker: 'agent', text: "Absolutely. So with that off the table, would you like to set up a call with one of our buyer specialists this week?", timestamp_ms: 21800 },
-        { speaker: 'user',  text: "Sure, that sounds good.", timestamp_ms: 27400 },
-        { speaker: 'agent', text: "Perfect, I'll get that scheduled. What's the best email for a calendar invite?", timestamp_ms: 29100 },
-        { speaker: 'user',  text: "It's sarah@email.com.", timestamp_ms: 33500 },
-      ],
-    },
-    {
-      label: 'FAIL — Buyer requests legal and title advice, agent cannot handle, escalation needed',
-      outcome: 'fail',
-      turns: [
-        { speaker: 'agent', text: "Hi, Marcus from Summit Real Estate. You submitted a form about homes in the area.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yes, I was looking. But honestly my main concern is the title situation on a property I'm considering. There may be a lien on it.", timestamp_ms: 4100 },
-        { speaker: 'agent', text: "I see. A lien can sometimes be resolved at closing.", timestamp_ms: 10800 },
-        { speaker: 'user',  text: "Can you tell me what my legal exposure is if the lien isn't cleared before we close? And what happens to my deposit?", timestamp_ms: 14200 },
-        { speaker: 'agent', text: "That's a good question. Generally speaking, liens transfer with the property unless resolved.", timestamp_ms: 22100 },
-        { speaker: 'user',  text: "So I could be responsible for someone else's debt? I need specific legal advice here, not generalizations.", timestamp_ms: 27600 },
-        { speaker: 'agent', text: "I'd recommend consulting a real estate attorney for that level of detail.", timestamp_ms: 34500 },
-        { speaker: 'user',  text: "Then what am I talking to you for? This isn't helpful.", timestamp_ms: 38900 },
-        { speaker: 'agent', text: "I understand. I'll note your concerns.", timestamp_ms: 41200 },
-      ],
-    },
+
   ],
 
-  // ── TechPro Re-Engagement ──────────────────────────────────
-  'agent-gamma': [
-    {
-      label: 'PASS — Lead re-engaged, demo booked',
-      outcome: 'pass',
-      turns: [
-        { speaker: 'agent', text: "Hi David, this is Alex from TechPro Solutions. You reached out to us about our workflow automation platform a while back — do you have just a few minutes?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yeah, I remember. We ended up going in a different direction at the time.", timestamp_ms: 5200 },
-        { speaker: 'agent', text: "Totally understand. I'm calling because we've released a major update that directly addresses the challenges most ops teams face — specifically around approval workflows and reporting delays. It's a completely different product from what you may have seen.", timestamp_ms: 7900 },
-        { speaker: 'user',  text: "What kind of improvements are we talking about?", timestamp_ms: 16800 },
-        { speaker: 'agent', text: "Can I ask — what was the main bottleneck you were trying to solve when you first looked at us?", timestamp_ms: 18600 },
-        { speaker: 'user',  text: "Honestly it was the manual approval process. It was taking our team days to get sign-offs.", timestamp_ms: 23900 },
-        { speaker: 'agent', text: "That's exactly what we rebuilt. We helped a 50-person ops team at a logistics company cut their approval cycle from 3 days to 4 hours in the first month. I'd love to show you how in a quick 20-minute demo — no sales pressure, just a look at what's possible. I have Thursday at 2 PM or Friday at 10 AM. Which works better?", timestamp_ms: 26500 },
-        { speaker: 'user',  text: "Thursday at 2 actually works.", timestamp_ms: 38400 },
-        { speaker: 'agent', text: "Perfect! I'll send a calendar invite with the Zoom link to your email. Looking forward to showing you what we've built, David.", timestamp_ms: 40200 },
-      ],
-    },
-    {
-      label: 'PASS — Skeptical lead overcome, demo confirmed',
-      outcome: 'pass',
-      turns: [
-        { speaker: 'agent', text: "Hi Lisa, Alex from TechPro Solutions. You looked at our platform a few months back — do you have a minute?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "I remember. We've tried tools like yours before and they never really stuck.", timestamp_ms: 4800 },
-        { speaker: 'agent', text: "That's completely fair feedback. What was the main issue with the tools you've tried?", timestamp_ms: 8200 },
-        { speaker: 'user',  text: "They were too complex for our team to actually use. People just went back to email.", timestamp_ms: 12500 },
-        { speaker: 'agent', text: "That's the most common thing we hear. Our new version was built specifically around adoption — the average team is fully onboarded in two days, not two months. We helped a marketing agency with the exact same problem and their team was at 90% adoption in a week.", timestamp_ms: 15900 },
-        { speaker: 'user',  text: "Okay, that does sound different.", timestamp_ms: 27100 },
-        { speaker: 'agent', text: "I think you'd see what I mean in just 20 minutes. I have Thursday at 2 or Friday at 10 — which works?", timestamp_ms: 29000 },
-        { speaker: 'user',  text: "Friday at 10 works.", timestamp_ms: 34600 },
-        { speaker: 'agent', text: "Excellent. I'll send the Zoom invite right over. Looking forward to it, Lisa!", timestamp_ms: 36400 },
-      ],
-    },
-    {
-      label: 'FAIL — Lead not re-engaged, no demo booked',
-      outcome: 'fail',
-      turns: [
-        { speaker: 'agent', text: "Hi, calling from TechPro Solutions. You looked at our platform before.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Yeah we went with a competitor.", timestamp_ms: 2900 },
-        { speaker: 'agent', text: "Oh okay, I understand. Well if you ever change your mind, we're here.", timestamp_ms: 4800 },
-        { speaker: 'user',  text: "Sure, thanks.", timestamp_ms: 8200 },
-        { speaker: 'agent', text: "Have a good day!", timestamp_ms: 9500 },
-      ],
-    },
-    {
-      label: 'PARTIAL — Pain point uncovered but demo not booked',
-      outcome: 'partial',
-      turns: [
-        { speaker: 'agent', text: "Hi James, Alex from TechPro Solutions. You reached out about our workflow platform — do you have a couple minutes?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "I remember. We haven't pulled the trigger on anything yet.", timestamp_ms: 4600 },
-        { speaker: 'agent', text: "We've actually made a lot of improvements since then. What was the main challenge you were trying to solve?", timestamp_ms: 7100 },
-        { speaker: 'user',  text: "Mainly our onboarding process for new clients — it's way too manual.", timestamp_ms: 12400 },
-        { speaker: 'agent', text: "That's one of our strongest use cases. I can send you some case studies on that specifically.", timestamp_ms: 16800 },
-        { speaker: 'user',  text: "Yeah, send it over and I'll take a look.", timestamp_ms: 21500 },
-        { speaker: 'agent', text: "Will do. What's the best email?", timestamp_ms: 23200 },
-        { speaker: 'user',  text: "james@company.com", timestamp_ms: 25600 },
-        { speaker: 'agent', text: "Got it. I'll send those right over!", timestamp_ms: 27100 },
-      ],
-    },
-    {
-      label: 'PARTIAL — Agent promises non-existent feature (script deviation)',
-      outcome: 'partial',
-      turns: [
-        { speaker: 'agent', text: "Hi Kevin, Alex from TechPro Solutions. You looked at our platform a while back — do you have a couple minutes?", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Sure. We're still evaluating tools.", timestamp_ms: 4200 },
-        { speaker: 'agent', text: "What's been the biggest gap with what you've tried so far?", timestamp_ms: 6100 },
-        { speaker: 'user',  text: "We really need native Salesforce integration — bidirectional sync, not just a Zapier workaround.", timestamp_ms: 10800 },
-        { speaker: 'agent', text: "Yes, we have a native Salesforce connector that does full bidirectional sync. It's been available since our last release.", timestamp_ms: 17300 },
-        { speaker: 'user',  text: "Oh perfect, that's exactly what we need. Does it support custom objects?", timestamp_ms: 23600 },
-        { speaker: 'agent', text: "It handles standard objects out of the box and custom objects can be configured in the settings.", timestamp_ms: 27200 },
-        { speaker: 'user',  text: "Great, that changes things. Can we set up a demo to see it in action?", timestamp_ms: 33900 },
-        { speaker: 'agent', text: "Absolutely! I have Thursday at 2 or Friday at 10 — which works?", timestamp_ms: 36500 },
-        { speaker: 'user',  text: "Thursday at 2 works.", timestamp_ms: 40100 },
-        { speaker: 'agent', text: "Perfect, I'll send the invite!", timestamp_ms: 41800 },
-      ],
-    },
-    {
-      label: 'FAIL — Prospect raises SOC2 compliance concern, agent cannot answer, escalation needed',
-      outcome: 'fail',
-      turns: [
-        { speaker: 'agent', text: "Hi Maria, Alex from TechPro Solutions. You submitted interest in our workflow platform.", timestamp_ms: 0 },
-        { speaker: 'user',  text: "Right. We were looking at it but our security team flagged some concerns.", timestamp_ms: 4700 },
-        { speaker: 'agent', text: "Happy to address those. What were their concerns?", timestamp_ms: 7900 },
-        { speaker: 'user',  text: "We're SOC2 Type II certified and need all our vendors to be as well. Are you SOC2 Type II certified?", timestamp_ms: 12100 },
-        { speaker: 'agent', text: "We take security very seriously and have robust data protection measures in place.", timestamp_ms: 18500 },
-        { speaker: 'user',  text: "That's not what I asked. SOC2 Type II is a specific certification. Do you have it or not?", timestamp_ms: 23100 },
-        { speaker: 'agent', text: "I believe we have various compliance certifications. I'd have to check on the specific SOC2 details.", timestamp_ms: 28700 },
-        { speaker: 'user',  text: "This is a hard requirement for us. If you can't confirm it right now, this conversation is over.", timestamp_ms: 34200 },
-        { speaker: 'agent', text: "I understand. I can have someone follow up with the documentation.", timestamp_ms: 39800 },
-        { speaker: 'user',  text: "Fine. But we won't proceed without it.", timestamp_ms: 43600 },
-      ],
-    },
-  ],
 }
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
 function pickCase(agentId: string, type: 'pass' | 'fail' | 'partial' | 'random'): TestCase {
-  const pool = CASES[agentId] ?? CASES['agent-alpha']
+  const pool     = CASES[agentId] ?? CASES['ghl-ag-1']
   if (type === 'random') return pickRandom(pool)
   const filtered = pool.filter((c) => c.outcome === type)
   return filtered.length ? pickRandom(filtered) : pickRandom(pool)
@@ -340,14 +337,14 @@ function sign(body: string): string {
 function post(url: string, body: string, signature: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
-    const req = http.request(
+    const req    = http.request(
       {
         hostname: parsed.hostname,
-        port: parsed.port,
-        path: parsed.pathname,
-        method: 'POST',
+        port:     parsed.port,
+        path:     parsed.pathname,
+        method:   'POST',
         headers: {
-          'content-type': 'application/json',
+          'content-type':   'application/json',
           'content-length': Buffer.byteLength(body),
           'x-ghl-signature': signature,
         },
@@ -364,25 +361,25 @@ function post(url: string, body: string, signature: string): Promise<string> {
   })
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Main
-// ─────────────────────────────────────────────────────────────
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Main
+// ─────────────────────────────────────────────────────────────────────────────
+
 type SendResult = { agentId: string; label: string; outcome: string; callId: string; transcriptId?: string; ok: boolean }
 
 async function sendWebhook(agentId: string, testCase: TestCase): Promise<SendResult> {
-  const id = callId()
+  const id      = callId()
   const payload = {
-    callId: id,
-    locationId: LOCATION_ID,
+    callId:          id,
+    locationId:      LOCATION_ID,
     agentId,
-    callerPhone: `+1${Math.floor(2000000000 + Math.random() * 8000000000)}`,
+    callerPhone:     `+1${Math.floor(2000000000 + Math.random() * 8000000000)}`,
     durationSeconds: Math.round(testCase.turns[testCase.turns.length - 1].timestamp_ms / 1000) + 10,
-    turns: testCase.turns,
+    turns:           testCase.turns,
   }
 
   const body      = JSON.stringify(payload)
@@ -390,12 +387,12 @@ async function sendWebhook(agentId: string, testCase: TestCase): Promise<SendRes
   const tag       = testCase.outcome === 'pass' ? '✓ PASS' : testCase.outcome === 'fail' ? '✗ FAIL' : '~ PARTIAL'
 
   console.log(`\n→ [${tag}] ${testCase.label}`)
-  console.log(`  Agent:    ${agentId}  |  Call ID: ${id}  |  Turns: ${payload.turns.length}  |  Duration: ~${payload.durationSeconds}s`)
+  console.log(`  Agent: ${agentId}  |  Call ID: ${id}  |  Turns: ${payload.turns.length}  |  Duration: ~${payload.durationSeconds}s`)
   console.log(`  Posting to ${BASE_URL}/webhooks/call-completed …`)
 
   try {
-    const response     = await post(`${BASE_URL}/webhooks/call-completed`, body, signature)
-    const parsed       = JSON.parse(response)
+    const response = await post(`${BASE_URL}/webhooks/call-completed`, body, signature)
+    const parsed   = JSON.parse(response)
     if (parsed.received) {
       console.log(`  ✓ Accepted — transcript ID: ${parsed.transcriptId}`)
       return { agentId, label: testCase.label, outcome: testCase.outcome, callId: id, transcriptId: parsed.transcriptId, ok: true }
@@ -410,18 +407,15 @@ async function sendWebhook(agentId: string, testCase: TestCase): Promise<SendRes
 
 async function main() {
   if (BATCH_MODE) {
-    const agentIds = AGENT_GHL_ID === 'all' ? Object.keys(CASES) : [AGENT_GHL_ID]
-    const targets  = agentIds.flatMap((aid) => (CASES[aid] ?? []).map((tc) => ({ agentId: aid, testCase: tc })))
-
-    console.log(`\nBatch mode — ${targets.length} scenarios across agent(s): ${agentIds.join(', ')}`)
+    const cases = CASES[AGENT_GHL_ID] ?? []
+    console.log(`\nBatch mode — ${cases.length} scenarios for agent: ${AGENT_GHL_ID}`)
     console.log(`Location: ${LOCATION_ID}  |  Stagger: ${BATCH_DELAY_MS}ms`)
     console.log('─'.repeat(60))
 
     const results: SendResult[] = []
-    for (let i = 0; i < targets.length; i++) {
-      const result = await sendWebhook(targets[i].agentId, targets[i].testCase)
-      results.push(result)
-      if (i < targets.length - 1) await delay(BATCH_DELAY_MS)
+    for (let i = 0; i < cases.length; i++) {
+      results.push(await sendWebhook(AGENT_GHL_ID, cases[i]))
+      if (i < cases.length - 1) await delay(BATCH_DELAY_MS)
     }
 
     console.log('\n' + '═'.repeat(70))
@@ -430,19 +424,18 @@ async function main() {
     for (const r of results) {
       const status     = r.ok ? '✓' : '✗'
       const outcomeTag = r.outcome === 'pass' ? 'PASS   ' : r.outcome === 'fail' ? 'FAIL   ' : 'PARTIAL'
-      const label      = r.label.length > 42 ? r.label.slice(0, 39) + '…' : r.label.padEnd(42)
-      console.log(`  ${status} [${outcomeTag}] ${r.agentId.padEnd(14)} ${label}`)
+      const label      = r.label.length > 50 ? r.label.slice(0, 47) + '…' : r.label.padEnd(50)
+      console.log(`  ${status} [${outcomeTag}] ${label}`)
     }
     const ok = results.filter((r) => r.ok).length
-    console.log(`\n  ${ok}/${results.length} accepted — watch Temporal UI or SSE for analysis completion.`)
+    console.log(`\n  ${ok}/${results.length} accepted — watch the dashboard or Temporal UI for analysis results.`)
 
   } else {
-    // Single-shot
     const testCase = pickCase(AGENT_GHL_ID, SCENARIO_TYPE as 'pass' | 'fail' | 'partial' | 'random')
     const result   = await sendWebhook(AGENT_GHL_ID, testCase)
     if (result.ok) {
-      console.log('\n  Watch the Temporal UI or SSE stream for analysis completion.')
-    } else if (!result.transcriptId) {
+      console.log('\n  Watch the dashboard or Temporal UI for analysis completion.')
+    } else {
       console.error('\n  Make sure the backend is running: npm run dev')
     }
   }

@@ -4,11 +4,13 @@ import { ghlAuth } from '../middleware/ghl-auth'
 import { AgentsService } from '../services/agents-service'
 import { TranscriptService } from '../services/transcript-service'
 import { AppError } from '../middleware/error-handler'
+import { GHLClient, GHLClientError } from '../lib/ghl-client'
 import { config } from '../config'
 
 export const agentsRouter = Router()
 const agentsService = new AgentsService()
 const transcriptService = new TranscriptService()
+const ghlClient = new GHLClient()
 
 let temporalClient: Client | null = null
 async function getTemporalClient(): Promise<Client> {
@@ -26,6 +28,31 @@ agentsRouter.get('/', ghlAuth(), async (req: Request, res: Response, next: NextF
     const agents = await agentsService.listByLocation(locationId)
     res.json(agents)
   } catch (err) { next(err) }
+})
+
+// POST /api/agents/sync  — pull agents from GHL Voice AI API and upsert into DB
+agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const locationId = (req as any).locationId as string
+    const ghlAgents = await ghlClient.listAgents(locationId)
+    console.log(`[agents/sync] GHL returned ${ghlAgents.length} agents for ${locationId}`, ghlAgents.map(a => ({ id: a.id, name: a.name })))
+    const synced = await agentsService.upsertFromGHL(locationId, ghlAgents as unknown as Array<Record<string, unknown>>)
+    res.json({ ok: true, synced })
+  } catch (err) {
+    if (err instanceof GHLClientError) {
+      console.warn('[agents/sync] HighLevel sync failed', {
+        status: err.upstreamStatus,
+        message: err.upstreamMessage,
+      })
+      next(new AppError(
+        'Unable to sync agents from HighLevel',
+        502,
+        `GHL_SYNC_FAILED${err.upstreamStatus ? `_${err.upstreamStatus}` : ''}`
+      ))
+      return
+    }
+    next(err)
+  }
 })
 
 // GET /api/agents/:agentId/analysis?locationId=...

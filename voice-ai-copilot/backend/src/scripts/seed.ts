@@ -6,52 +6,75 @@ dotenv.config({ path: path.join(__dirname, '../../../.env') })
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
+const LOCATION_ID = process.env.SEED_LOCATION_ID ?? 'TJkIaqSqj7jectw2dxRx'
+
 async function seed() {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
 
-    // Clear existing seed data
-    await client.query("DELETE FROM locations WHERE location_id = 'loc-seed-1'")
-
-    // Location
+    // Ensure location row exists — preserve OAuth tokens if already present
     await client.query(
-      `INSERT INTO locations (location_id, name) VALUES ('loc-seed-1', 'Demo Agency') ON CONFLICT DO NOTHING`
+      `INSERT INTO locations (location_id, name) VALUES ($1, 'Demo Agency')
+       ON CONFLICT (location_id) DO UPDATE SET name = 'Demo Agency'`,
+      [LOCATION_ID]
     )
 
-    // Agents
+    // Remove only the fake demo agents — preserve any real HL-synced agents
+    await client.query(
+      `DELETE FROM agents WHERE location_id = $1 AND ghl_agent_id IN ('ghl-ag-1','ghl-ag-2','ghl-ag-3')`,
+      [LOCATION_ID]
+    )
+
+    // ── Agents ────────────────────────────────────────────────
     const agents = [
-      { ghl_agent_id: 'ghl-ag-1', name: 'Sarah — Appointment Setter', script: 'Focus on booking appointments. Always confirm date and time.' },
-      { ghl_agent_id: 'ghl-ag-2', name: 'Mike — Lead Qualifier', script: 'Qualify leads based on budget and timeline.' },
-      { ghl_agent_id: 'ghl-ag-3', name: 'Emma — Objection Handler', script: 'Handle objections professionally and pivot to benefits.' },
+      {
+        ghl_agent_id: 'ghl-ag-1',
+        name: 'Aria — Travel Booking Specialist',
+        script: 'Confirm travel destination and dates. Offer the flight + hotel bundle package. Secure booking commitment and payment intent before ending the call.',
+      },
+      {
+        ghl_agent_id: 'ghl-ag-2',
+        name: 'Marcus — FlowCRM Sales Specialist',
+        script: 'Lead with discovery questions to uncover the prospect\'s operational pain. Present FlowCRM pipeline automation as the solution. Always close for a 14-day free trial or a scheduled demo call.',
+      },
+      {
+        ghl_agent_id: 'ghl-ag-3',
+        name: 'Sophie — Dental Care Coordinator',
+        script: 'Book new patient appointments using the $99 special. Verify insurance in-network status — approved carriers: Delta Dental, Cigna, Aetna, MetLife. Address cost concerns. Always confirm callback number before closing.',
+      },
     ]
 
     const agentIds: string[] = []
     for (const a of agents) {
       const r = await client.query(
-        `INSERT INTO agents (location_id, ghl_agent_id, name, script) VALUES ('loc-seed-1', $1, $2, $3)
-         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE SET name = $2
+        `INSERT INTO agents (location_id, ghl_agent_id, name, script) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE SET name = $3, script = $4
          RETURNING id`,
-        [a.ghl_agent_id, a.name, a.script]
+        [LOCATION_ID, a.ghl_agent_id, a.name, a.script]
       )
       agentIds.push(r.rows[0].id)
     }
 
-    // KPI Configs
+    // ── KPI Configs ───────────────────────────────────────────
     const kpiGoals = [
+      // ghl-ag-1: Travel Booking
       [
-        { name: 'Book Appointment', description: 'Confirm a specific date and time', weight: 0.6 },
-        { name: 'Handle Objection', description: 'Address at least one concern professionally', weight: 0.4 },
+        { name: 'Confirm Destination & Dates', description: 'Get specific travel destination and dates from the prospect', weight: 0.4 },
+        { name: 'Present Bundle Upsell', description: 'Proactively offer the flight + hotel bundle package', weight: 0.3 },
+        { name: 'Secure Booking Commitment', description: 'Prospect agrees to book or proceeds to payment', weight: 0.3 },
       ],
+      // ghl-ag-2: FlowCRM Sales
       [
-        { name: 'Qualify Budget', description: 'Identify if budget meets threshold', weight: 0.5 },
-        { name: 'Get Timeline', description: 'Determine purchase timeline', weight: 0.3 },
-        { name: 'Confirm Interest', description: 'Explicit buying intent statement', weight: 0.2 },
+        { name: 'Uncover Pain Point', description: 'Identify the prospect\'s specific operational problem', weight: 0.3 },
+        { name: 'Present Product Fit', description: 'Connect FlowCRM features directly to the stated pain point', weight: 0.4 },
+        { name: 'Close for Trial or Demo', description: 'Secure a 14-day free trial signup or a demo call booking', weight: 0.3 },
       ],
+      // ghl-ag-3: Dental Care
       [
-        { name: 'Acknowledge Objection', description: 'Repeat back the concern', weight: 0.3 },
-        { name: 'Provide Evidence', description: 'Counter with testimonial or fact', weight: 0.4 },
-        { name: 'Pivot to Benefit', description: 'Connect solution to their stated pain', weight: 0.3 },
+        { name: 'Book Appointment', description: 'Confirm a specific date and time for the new patient visit', weight: 0.5 },
+        { name: 'Verify Insurance Correctly', description: 'Only confirm in-network if carrier is Delta Dental, Cigna, Aetna, or MetLife', weight: 0.3 },
+        { name: 'Confirm Callback Number', description: 'Explicitly ask "Is this the best number to reach you?" before closing', weight: 0.2 },
       ],
     ]
 
@@ -66,108 +89,104 @@ async function seed() {
       kpiConfigIds.push(r.rows[0].id)
     }
 
-    // Sample transcripts + analyses
+    // ── Sample Analyzed Calls ─────────────────────────────────
+    // One historical call per agent showing the dashboard populated
     const sampleData = [
+
+      // ── Aria: PASS — Bali anniversary trip booked ──────────
       {
-        agentIdx: 0, callId: 'call-001', phone: '+14155552671', duration: 187,
+        agentIdx: 0, callId: 'seed-001', phone: '+14155552671', duration: 210,
         turns: [
-          { speaker: 'agent', text: 'Hi, this is Sarah from Clarity Solutions. Am I speaking with Jordan?', timestamp_ms: 0 },
-          { speaker: 'user',  text: 'Yes, this is Jordan.', timestamp_ms: 2100 },
-          { speaker: 'agent', text: 'Great! I\'m calling about your inquiry for our coaching program. Do you have a few minutes?', timestamp_ms: 3800 },
-          { speaker: 'user',  text: 'Sure, but I\'m not sure if I can afford it right now.', timestamp_ms: 6200 },
-          { speaker: 'agent', text: 'I completely understand. Many of our clients had the same concern initially. Can I ask—if cost weren\'t an issue, would this be something you\'d be excited about?', timestamp_ms: 8100 },
-          { speaker: 'user',  text: 'Honestly, yes. I really want to grow my business.', timestamp_ms: 12400 },
-          { speaker: 'agent', text: 'Perfect. We do have flexible payment options. Would Tuesday at 2 PM or Thursday at 4 PM work for a quick call with our advisor?', timestamp_ms: 14200 },
-          { speaker: 'user',  text: 'Thursday at 4 works.', timestamp_ms: 17800 },
-          { speaker: 'agent', text: 'Excellent! I\'ve got you down for Thursday at 4 PM. You\'ll get a confirmation email shortly. Looking forward to it!', timestamp_ms: 19100 },
+          { speaker: 'agent', text: 'Hi, this is Aria from Wanderlust Travel. Am I speaking with Priya?', timestamp_ms: 0 },
+          { speaker: 'user',  text: 'Yes, this is Priya.', timestamp_ms: 2200 },
+          { speaker: 'agent', text: 'Hi Priya! I saw you submitted a travel inquiry. Where are you thinking of going?', timestamp_ms: 3800 },
+          { speaker: 'user',  text: 'We are thinking Bali. My husband and I are celebrating our anniversary in March.', timestamp_ms: 7100 },
+          { speaker: 'agent', text: 'Bali is a perfect anniversary destination! Do you have specific dates in mind?', timestamp_ms: 11200 },
+          { speaker: 'user',  text: 'We are looking at March 15th through the 22nd — about a week.', timestamp_ms: 14500 },
+          { speaker: 'agent', text: 'March 15 to 22, 7 nights — noted. Would a complete package with flights and resort interest you? Less to manage.', timestamp_ms: 17800 },
+          { speaker: 'user',  text: 'A package sounds great, actually.', timestamp_ms: 23200 },
+          { speaker: 'agent', text: 'Perfect. I would recommend our Bali Bliss Bundle — round-trip flights, 7 nights at the Ubud Jungle Resort, daily breakfast, and airport transfers. It is our most popular couples package.', timestamp_ms: 25000 },
+          { speaker: 'user',  text: 'That sounds incredible. Let us do it.', timestamp_ms: 32100 },
+          { speaker: 'agent', text: 'Excellent! I will lock in availability for March 15 to 22 for two. I will need a $500 deposit to hold the booking. Can I take your card details now?', timestamp_ms: 34500 },
+          { speaker: 'user',  text: 'Yes, absolutely. Let me grab my card.', timestamp_ms: 40200 },
         ],
         passed: true,
-        score: 0.88,
-        summary: 'Agent successfully handled price objection by pivoting to value, confirmed genuine interest, and booked appointment for Thursday 4 PM.',
+        score: 0.93,
+        summary: 'Aria confirmed destination (Bali) and dates (Mar 15–22), proactively recommended the Bali Bliss Bundle couples package, and secured a booking deposit commitment on the call.',
         kpiScores: [
-          { goal: 'Book Appointment', score: 0.95, weight: 0.6, passed: true },
-          { goal: 'Handle Objection', score: 0.78, weight: 0.4, passed: true },
+          { goal: 'Confirm Destination & Dates', score: 0.98, weight: 0.4, passed: true },
+          { goal: 'Present Bundle Upsell',       score: 0.95, weight: 0.3, passed: true },
+          { goal: 'Secure Booking Commitment',   score: 0.85, weight: 0.3, passed: true },
         ],
         useActions: [],
       },
+
+      // ── Marcus: PASS — FlowCRM trial secured ───────────────
       {
-        agentIdx: 0, callId: 'call-002', phone: '+14155558832', duration: 143,
+        agentIdx: 1, callId: 'seed-002', phone: '+13105557723', duration: 198,
         turns: [
-          { speaker: 'agent', text: 'Hi, is this Alex?', timestamp_ms: 0 },
-          { speaker: 'user',  text: 'Yeah.', timestamp_ms: 1800 },
-          { speaker: 'agent', text: 'This is Sarah from Clarity Solutions. You filled out a form about our business coaching. Are you still interested?', timestamp_ms: 2500 },
-          { speaker: 'user',  text: 'I\'m not really sure, I\'ve been really busy.', timestamp_ms: 6200 },
-          { speaker: 'agent', text: 'That\'s totally understandable. Our program is actually designed for busy entrepreneurs. Can we schedule a time next week?', timestamp_ms: 8400 },
-          { speaker: 'user',  text: 'I\'ll have to check my calendar and get back to you.', timestamp_ms: 12100 },
-          { speaker: 'agent', text: 'Of course! I\'ll send you an email you can reply to. Thanks for your time, Alex.', timestamp_ms: 14300 },
+          { speaker: 'agent', text: 'Hi, this is Marcus from FlowCRM. Am I speaking with Rachel?', timestamp_ms: 0 },
+          { speaker: 'user',  text: 'Yes, that is me.', timestamp_ms: 2100 },
+          { speaker: 'agent', text: 'Hi Rachel! Quick question — what does your current lead management process look like today?', timestamp_ms: 3700 },
+          { speaker: 'user',  text: 'Honestly it is a mess. We use spreadsheets and my reps keep dropping follow-ups. We probably lost three deals last month because nobody followed up in time.', timestamp_ms: 7300 },
+          { speaker: 'agent', text: 'So if I am hearing you right — it is not a lack of leads, it is follow-up consistency and visibility into where things stand?', timestamp_ms: 13800 },
+          { speaker: 'user',  text: 'Exactly. I have no idea which rep is working which lead unless I physically ask them.', timestamp_ms: 18200 },
+          { speaker: 'agent', text: 'That is precisely the problem FlowCRM was built to solve. Our pipeline automation assigns leads automatically, sets follow-up reminders at defined intervals, and gives you a real-time dashboard showing every deal — so you are never in the dark.', timestamp_ms: 20500 },
+          { speaker: 'user',  text: 'That sounds exactly like what we need. How much does it cost?', timestamp_ms: 28700 },
+          { speaker: 'agent', text: 'Plans start at $49 per user per month. But before committing, why not try it free for 14 days — no credit card required? You could have your team set up by end of this week.', timestamp_ms: 31200 },
+          { speaker: 'user',  text: 'That sounds easy. Yes, let us do the trial.', timestamp_ms: 38600 },
+          { speaker: 'agent', text: 'Perfect! I will send the signup link to your email right now. You will be running in about 10 minutes.', timestamp_ms: 40800 },
+        ],
+        passed: true,
+        score: 0.92,
+        summary: 'Marcus uncovered a clear pain (missed follow-ups, no pipeline visibility), connected FlowCRM\'s automation directly to the stated problem, and closed with a 14-day free trial — no credit card required.',
+        kpiScores: [
+          { goal: 'Uncover Pain Point',    score: 0.95, weight: 0.3, passed: true },
+          { goal: 'Present Product Fit',   score: 0.92, weight: 0.4, passed: true },
+          { goal: 'Close for Trial or Demo', score: 0.88, weight: 0.3, passed: true },
+        ],
+        useActions: [],
+      },
+
+      // ── Sophie: PARTIAL — Booked but Humana false positive + no callback ─
+      {
+        agentIdx: 2, callId: 'seed-003', phone: '+17025559981', duration: 165,
+        turns: [
+          { speaker: 'agent', text: 'Hi, this is Sophie from Bright Smile Dental. Am I speaking with Amy?', timestamp_ms: 0 },
+          { speaker: 'user',  text: 'Yes, that is me.', timestamp_ms: 2100 },
+          { speaker: 'agent', text: 'Hi Amy! I am calling about our $99 new patient special — comprehensive exam, X-rays, and a professional cleaning. I would love to get you scheduled!', timestamp_ms: 3500 },
+          { speaker: 'user',  text: 'That sounds good. I have Humana dental insurance — do you take that?', timestamp_ms: 9200 },
+          { speaker: 'agent', text: 'Yes, absolutely — we accept Humana, so you should be fully covered. No out-of-pocket cost at all!', timestamp_ms: 13800 },
+          { speaker: 'user',  text: 'Oh perfect, that makes it an easy yes.', timestamp_ms: 18500 },
+          { speaker: 'agent', text: 'Wonderful! We have Monday at 11 AM or Wednesday at 2 PM available. Which works better?', timestamp_ms: 20300 },
+          { speaker: 'user',  text: 'Monday at 11 AM sounds perfect.', timestamp_ms: 24900 },
+          { speaker: 'agent', text: 'You are all set for Monday at 11 AM! We will send a confirmation text. We look forward to seeing you, Amy!', timestamp_ms: 26600 },
         ],
         passed: false,
-        score: 0.42,
-        summary: 'Agent failed to book appointment. When prospect said they\'d "get back to you", agent did not attempt to secure a specific time slot.',
+        score: 0.52,
+        summary: 'Sophie booked the appointment but made two script deviations: confirmed Humana as in-network (it is not — approved carriers are Delta Dental, Cigna, Aetna, MetLife), and closed without asking for the callback number.',
         kpiScores: [
-          { goal: 'Book Appointment', score: 0.15, weight: 0.6, passed: false },
-          { goal: 'Handle Objection', score: 0.85, weight: 0.4, passed: true },
+          { goal: 'Book Appointment',           score: 0.92, weight: 0.5, passed: true },
+          { goal: 'Verify Insurance Correctly',  score: 0.05, weight: 0.3, passed: false },
+          { goal: 'Confirm Callback Number',     score: 0.05, weight: 0.2, passed: false },
         ],
         useActions: [
-          { type: 'missed_opportunity', description: 'Prospect was non-committal but agent did not push for a specific meeting time or offer alternatives', turn: 5 },
-          { type: 'deviation', description: 'Script requires offering at least two specific time slots before letting prospect leave without booking', turn: 6 },
+          { type: 'deviation', description: 'Agent confirmed Humana is in-network — Humana is NOT on the approved carrier list (Delta Dental, Cigna, Aetna, MetLife). Patient will arrive expecting coverage that does not exist.', turn: 4 },
+          { type: 'missed_opportunity', description: 'Call ended without asking "Is this the best number to reach you?" — a required closing step per script.', turn: 8 },
         ],
       },
-      {
-        agentIdx: 1, callId: 'call-003', phone: '+13105557723', duration: 234,
-        turns: [
-          { speaker: 'agent', text: 'Hi, this is Mike. I saw you expressed interest in our growth accelerator. Got a few minutes?', timestamp_ms: 0 },
-          { speaker: 'user',  text: 'Yeah, sure.', timestamp_ms: 2400 },
-          { speaker: 'agent', text: 'Great. To make sure we\'re a good fit, can I ask—what\'s your monthly marketing budget right now?', timestamp_ms: 3800 },
-          { speaker: 'user',  text: 'We\'re spending about $3,000 a month.', timestamp_ms: 7100 },
-          { speaker: 'agent', text: 'Perfect, that\'s right in our sweet spot. And are you looking to implement something in the next 30-90 days?', timestamp_ms: 9200 },
-          { speaker: 'user',  text: 'Yeah, we need to move quickly. Our competitor just launched something new.', timestamp_ms: 12800 },
-          { speaker: 'agent', text: 'That urgency is actually an advantage for you. With competitive pressure, companies that move in the next 30 days see 40% better outcomes. Are you ready to get started?', timestamp_ms: 15400 },
-          { speaker: 'user',  text: 'That sounds good. What are the next steps?', timestamp_ms: 20200 },
-        ],
-        passed: true,
-        score: 0.91,
-        summary: 'Excellent qualification call. Budget confirmed at $3k/month (above threshold), timeline is 30-90 days with urgency, and prospect expressed explicit buying intent.',
-        kpiScores: [
-          { goal: 'Qualify Budget', score: 0.95, weight: 0.5, passed: true },
-          { goal: 'Get Timeline', score: 0.90, weight: 0.3, passed: true },
-          { goal: 'Confirm Interest', score: 0.88, weight: 0.2, passed: true },
-        ],
-        useActions: [],
-      },
-      {
-        agentIdx: 2, callId: 'call-004', phone: '+17025559981', duration: 198,
-        turns: [
-          { speaker: 'agent', text: 'Hi, I\'m calling from Peak Performance. You had some concerns about our program?', timestamp_ms: 0 },
-          { speaker: 'user',  text: 'Yes, I\'ve heard mixed reviews about coaching programs in general.', timestamp_ms: 3100 },
-          { speaker: 'agent', text: 'That\'s a fair concern. What specifically have you heard?', timestamp_ms: 5800 },
-          { speaker: 'user',  text: 'That they overpromise and underdeliver.', timestamp_ms: 8400 },
-          { speaker: 'agent', text: 'I hear you. Our clients have shared that same concern before joining. One of them, a contractor from Phoenix, was in the same spot. After 90 days he increased revenue by 40%. Would hearing more about how we structured that help?', timestamp_ms: 11100 },
-          { speaker: 'user',  text: 'I guess so.', timestamp_ms: 16700 },
-          { speaker: 'agent', text: 'The key difference with us is our guarantee—if you don\'t see measurable results in 60 days, you get a full refund. So the risk is completely removed. Does that address your concern?', timestamp_ms: 18300 },
-          { speaker: 'user',  text: 'That does make me feel better. What are the details?', timestamp_ms: 23400 },
-        ],
-        passed: true,
-        score: 0.83,
-        summary: 'Agent acknowledged the objection, provided a relevant testimonial, and pivoted to the guarantee to remove risk. Prospect moved from skeptical to engaged.',
-        kpiScores: [
-          { goal: 'Acknowledge Objection', score: 0.92, weight: 0.3, passed: true },
-          { goal: 'Provide Evidence', score: 0.85, weight: 0.4, passed: true },
-          { goal: 'Pivot to Benefit', score: 0.70, weight: 0.3, passed: true },
-        ],
-        useActions: [],
-      },
+
     ]
 
     for (const d of sampleData) {
-      // Insert transcript
       const tr = await client.query(
         `INSERT INTO transcripts (agent_id, location_id, ghl_call_id, caller_phone, duration_seconds, turns, raw_payload, status)
-         VALUES ($1, 'loc-seed-1', $2, $3, $4, $5, $6, 'analyzed')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'analyzed')
          ON CONFLICT (ghl_call_id) DO NOTHING
          RETURNING id`,
         [
           agentIds[d.agentIdx],
+          LOCATION_ID,
           d.callId,
           d.phone,
           d.duration,
@@ -178,17 +197,14 @@ async function seed() {
       if (!tr.rows[0]) continue
 
       const tId = tr.rows[0].id
-
-      // Insert analysis result
       const ar = await client.query(
-        `INSERT INTO analysis_results (transcript_id, kpi_config_id, overall_score, passed, kpi_scores, summary, llm_provider, llm_model)
-         VALUES ($1, $2, $3, $4, $5, $6, 'openai', 'gpt-4o')
+        `INSERT INTO analysis_results (transcript_id, kpi_config_id, overall_score, passed, kpi_scores, summary, llm_provider, llm_model, script_suggestions)
+         VALUES ($1, $2, $3, $4, $5, $6, 'openai', 'gpt-4o', $7)
          RETURNING id`,
-        [tId, kpiConfigIds[d.agentIdx], d.score, d.passed, JSON.stringify(d.kpiScores), d.summary]
+        [tId, kpiConfigIds[d.agentIdx], d.score, d.passed, JSON.stringify(d.kpiScores), d.summary, JSON.stringify([])]
       )
       const aId = ar.rows[0].id
 
-      // Insert use actions
       for (const ua of d.useActions) {
         await client.query(
           `INSERT INTO use_actions (analysis_id, transcript_turn_index, type, description) VALUES ($1, $2, $3, $4)`,
@@ -198,11 +214,11 @@ async function seed() {
     }
 
     await client.query('COMMIT')
-    console.log('✓ Seed data inserted successfully')
-    console.log('  Location: loc-seed-1')
-    console.log('  Agents: 3')
-    console.log('  Transcripts: 4 analyzed, 2 pending')
-    console.log('  Pass rate: 3/4 (75%)')
+    console.log('✓ Seed complete')
+    console.log(`  Location : ${LOCATION_ID}`)
+    console.log('  Agents   : 3 (Aria, Marcus, Sophie)')
+    console.log('  KPI sets : 3')
+    console.log('  Calls    : 3 (Aria PASS, Marcus PASS, Sophie PARTIAL)')
   } catch (e) {
     await client.query('ROLLBACK')
     console.error('Seed failed:', e)

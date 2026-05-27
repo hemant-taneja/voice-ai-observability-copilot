@@ -1,0 +1,14 @@
+- better way to seed data or ingest data
+- What all agents are integrated how to create them
+- Set observability parameters based on the agent's specific goals or script
+- ui enhancement [last once all the goals are clear]
+- Identify deviations, failures, or missed opportunities against success criteria (KPIs) in the logs. [completed] intuitive ui for the same
+- immediate recommendations for prompt/script/agent adjustments based on identified failures. [agent prompt script in settings and enhancement | adjustment to be done to the same]
+- use actions capablitily clarity (e.g., specific segments of a call that require human
+  intervention or script training).
+- If we are able to update kpi then ideally we should be able to re evaluate and see all the evaluations per transcript (latest first)
+- do we have reat time sse events (for the transcipt processing and then the kpi being generated, so that we can see the status of each transcript whther processing or processed something like that)
+- Agent Manual testing
+- playground for transcript testing per agent
+- instead of toast have some sort of notifications panel so to see recent activities (new notifications)
+- move the review and comment notes to backend instead of frontend local store

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import AgentDetail from './AgentDetail.vue'
 
 vi.mock('../api/agents', () => ({
@@ -16,15 +17,15 @@ vi.mock('../api/agents', () => ({
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [{ path: '/agents/:id', component: AgentDetail }],
+  routes: [{ path: '/agents/:id', name: 'AgentDetail', component: AgentDetail }],
 })
 
 describe('AgentDetail', () => {
   it('renders agent name after loading', async () => {
+    const pinia = createPinia()
     router.push('/agents/ag-1?locationId=loc-1')
     await router.isReady()
-    const wrapper = mount(AgentDetail, { global: { plugins: [router] } })
-    // wait for async ops
+    const wrapper = mount(AgentDetail, { global: { plugins: [router, pinia] } })
     await new Promise((r) => setTimeout(r, 50))
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('Test Agent')

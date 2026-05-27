@@ -36,8 +36,14 @@ describe('GHLClient', () => {
     expect(agents).toHaveLength(1)
     expect(agents[0].name).toBe('Agent Alpha')
     expect(mockedAxios.get).toHaveBeenCalledWith(
-      expect.stringContaining('/locations/loc-123'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }) })
+      expect.stringContaining('/voice-ai/agents'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer tok-abc',
+          Version: '2023-02-21',
+        }),
+        params: { locationId: 'loc-123' },
+      })
     )
   })
 
@@ -58,5 +64,12 @@ describe('GHLClient', () => {
     expect(agents).toHaveLength(0)
     expect(mockedAxios.post).toHaveBeenCalledTimes(1)
     expect(mockedAxios.get).toHaveBeenCalledTimes(2)
+    expect(mockedAxios.get).toHaveBeenLastCalledWith(
+      expect.stringContaining('/voice-ai/agents'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer new-tok' }),
+        params: { locationId: 'loc-123' },
+      })
+    )
   })
 })

@@ -25,4 +25,7 @@ export const agentsApi = {
 
   simulate: (agentId: string, locationId: string, turns: SimulateTurn[]): Promise<SimulateResult> =>
     api.post<SimulateResult>(`/api/agents/${agentId}/simulate`, { turns }, { params: { locationId } }).then((r) => r.data),
+
+  syncFromHL: (locationId: string): Promise<{ synced: number }> =>
+    api.post<{ synced: number }>('/api/agents/sync', {}, { params: { locationId } }).then((r) => r.data),
 }

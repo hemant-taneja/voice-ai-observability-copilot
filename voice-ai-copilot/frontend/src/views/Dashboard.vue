@@ -52,6 +52,15 @@
           <span v-if="agentsStore.agents.length" class="count-pill mono">
             {{ agentsStore.agents.length }}
           </span>
+          <button class="sync-btn" :class="{ syncing }" :disabled="syncing" @click="syncAgents">
+            <svg v-if="!syncing" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 0 1 9-9"/>
+            </svg>
+            <svg v-else class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+            {{ syncing ? 'Syncing…' : 'Sync from HighLevel' }}
+          </button>
         </div>
         <p class="section-sub">Click an agent to view call history and KPI details</p>
       </div>
@@ -72,8 +81,17 @@
         </div>
         <p class="empty-title">No agents found</p>
         <p class="empty-hint">
-          Agents appear automatically once a call webhook is received for this location.
+          Click <strong>Sync from HighLevel</strong> above to pull your Voice AI agents from this location.
         </p>
+        <button class="sync-btn sync-btn--lg" :class="{ syncing }" :disabled="syncing" @click="syncAgents">
+          <svg v-if="!syncing" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 0 1 9-9"/>
+          </svg>
+          <svg v-else class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          {{ syncing ? 'Syncing…' : 'Sync from HighLevel' }}
+        </button>
       </div>
 
       <!-- Grid -->
@@ -93,15 +111,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAgentsStore } from '../stores/agents'
+import { useToast } from '../composables/useToast'
+import { agentsApi } from '../api/agents'
 import MetricCard from '../components/MetricCard.vue'
 import AgentCard from '../components/AgentCard.vue'
 
 const props = defineProps<{ locationId: string }>()
 const agentsStore = useAgentsStore()
+const { add: addToast } = useToast()
+const syncing = ref(false)
 
 onMounted(() => agentsStore.fetchAll(props.locationId))
+
+async function syncAgents() {
+  syncing.value = true
+  try {
+    const { synced } = await agentsApi.syncFromHL(props.locationId)
+    await agentsStore.fetchAll(props.locationId)
+    addToast(`Synced ${synced} agent${synced !== 1 ? 's' : ''} from HighLevel`, 'success')
+  } catch {
+    addToast('Sync failed — check HighLevel connection', 'error')
+  } finally {
+    syncing.value = false
+  }
+}
 
 const totalCalls = computed(() =>
   agentsStore.agents.reduce((s, a) => s + a.totalCalls, 0)
@@ -276,6 +311,49 @@ const openUseActions = computed(() =>
 .card-skeleton:nth-child(2) { animation-delay: 0.1s; }
 .card-skeleton:nth-child(3) { animation-delay: 0.2s; }
 .card-skeleton:nth-child(4) { animation-delay: 0.3s; }
+
+/* ── Sync button ─────────────────────────────────────────── */
+.sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.sync-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.sync-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sync-btn--lg {
+  font-size: 13px;
+  padding: 8px 18px;
+  margin-top: 4px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
 
 /* ── Empty state ─────────────────────────────────────────── */
 .empty-state {
