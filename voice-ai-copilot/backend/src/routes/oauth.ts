@@ -17,6 +17,85 @@ const GHL_BASE = 'https://services.leadconnectorhq.com'
  * GHL app settings → Advanced Settings → Redirect URI must be set to:
  *   https://<your-domain>/oauth/callback
  */
+/**
+ * GET /oauth/installing?companyId=xxx
+ *
+ * Intermediate page shown after a company-level OAuth install.
+ * Polls until the INSTALL webhook has fired and minted a location token,
+ * then redirects the user to the dashboard with the correct locationId.
+ */
+oauthRouter.get('/installing', (_req: Request, res: Response) => {
+  const appUrl = config.appUrl ?? ''
+  res.setHeader('Content-Type', 'text/html')
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Setting up Voice AI Copilot...</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f0f10; color: #e2e2e2; }
+    .box { text-align: center; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #6c63ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    p { color: #888; margin: 8px 0 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <h2>Setting up your dashboard...</h2>
+    <p>This takes just a moment.</p>
+  </div>
+  <script>
+    const companyId = new URLSearchParams(location.search).get('companyId')
+    let attempts = 0
+    const max = 15
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/location-for-company?companyId=' + companyId)
+        const data = await res.json()
+        if (data.locationId) {
+          window.location.replace('${appUrl}/?locationId=' + data.locationId + '&installed=1')
+          return
+        }
+      } catch (_) {}
+
+      attempts++
+      if (attempts < max) {
+        setTimeout(poll, 2000)
+      } else {
+        window.location.replace('${appUrl}/?installed=1')
+      }
+    }
+
+    setTimeout(poll, 2000)
+  </script>
+</body>
+</html>`)
+})
+
+/**
+ * GET /api/location-for-company?companyId=xxx
+ *
+ * Returns the first location token minted for a given company.
+ * Used by the /oauth/installing polling page.
+ */
+oauthRouter.get('/location-for-company', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { companyId } = req.query as { companyId?: string }
+    if (!companyId) { res.json({ locationId: null }); return }
+
+    const { rows } = await db.query<{ location_id: string }>(
+      `SELECT location_id FROM locations
+       WHERE company_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [companyId]
+    )
+    res.json({ locationId: rows[0]?.location_id ?? null })
+  } catch (err) { next(err) }
+})
+
 oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, locationId: qsLocationId } = req.query as { code?: string; locationId?: string }
@@ -89,18 +168,9 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
              token_expires_at = EXCLUDED.token_expires_at`,
         [`company:${data.companyId}`, data.access_token, data.refresh_token, expiresAt]
       )
-      // Try to find an already-minted location token for this company
-      const { rows: locationRows } = await db.query<{ location_id: string }>(
-        `SELECT location_id FROM locations
-         WHERE company_id = $1
-         ORDER BY created_at DESC LIMIT 1`,
-        [data.companyId]
-      )
-      const resolvedLocationId = qsLocationId ?? locationRows[0]?.location_id
-      res.redirect(resolvedLocationId
-        ? `${config.appUrl ?? '/'}/?locationId=${resolvedLocationId}&installed=1`
-        : `${config.appUrl ?? '/'}/?installed=1`
-      )
+      // Redirect to a polling page — the INSTALL webhook fires async (2-3s later)
+      // and mints the location token. The polling page waits for it then redirects.
+      res.redirect(`${config.appUrl ?? ''}/oauth/installing?companyId=${data.companyId}`)
     } else {
       res.status(400).send('<h1>Installation failed</h1><p>Unknown token type received.</p>')
     }

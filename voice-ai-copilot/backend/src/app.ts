@@ -40,6 +40,7 @@ app.use('/api', router)
 app.use('/stream', streamRouter)
 app.use('/api/kpi', kpiRouter)
 app.use('/api/agents', agentsRouter)
+app.use('/api', oauthRouter)
 
 // Internal-only SSE broadcast — called by the Temporal worker process via HTTP
 // since it runs in a separate process and cannot share the in-memory sseManager.
