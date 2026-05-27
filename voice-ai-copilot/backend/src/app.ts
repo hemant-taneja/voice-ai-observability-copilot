@@ -12,7 +12,15 @@ import { sseManager, SSEEvent } from './lib/sse-manager'
 
 export const app = express()
 
-app.use(helmet())
+app.use(helmet({
+  frameguard: false, // allow GHL to embed in iframe
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'frame-ancestors': ["'self'", 'https://*.gohighlevel.com', 'https://*.leadconnectorhq.com'],
+    },
+  },
+}))
 app.use(cors())
 
 // Webhook routes MUST be registered before express.json() — they use express.raw() for signature verification
