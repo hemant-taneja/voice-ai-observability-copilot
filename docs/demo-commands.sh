@@ -21,6 +21,13 @@
 
 
 # ════════════════════════════════════════════════════════════
+#  NUKE  (wipe everything — locations, agents, calls, analyses)
+#  Run this before a fresh install demo so the DB is completely clean.
+# ════════════════════════════════════════════════════════════
+sudo docker compose exec postgres psql -U postgres -d voice_ai -c "DELETE FROM locations;"
+
+
+# ════════════════════════════════════════════════════════════
 #  DEMO SETUP  (run once before demo, in order)
 # ════════════════════════════════════════════════════════════
 
