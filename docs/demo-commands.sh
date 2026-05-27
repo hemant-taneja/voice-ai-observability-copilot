@@ -24,7 +24,7 @@
 #  NUKE  (wipe everything — locations, agents, calls, analyses)
 #  Run this before a fresh install demo so the DB is completely clean.
 # ════════════════════════════════════════════════════════════
-sudo docker compose exec postgres psql -U postgres -d voice_ai -c "DELETE FROM locations;"
+sudo docker compose exec postgres psql -U postgres -d voice_copilot -c "DELETE FROM locations;"
 
 
 # ════════════════════════════════════════════════════════════
@@ -68,3 +68,18 @@ sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 part
 
 # All 3 at once (2s stagger)
 sudo docker compose exec app node dist/scripts/simulate-webhook.js all
+
+
+# 1. Seed demo agents + pre-populated call history                                                                                                                        
+sudo docker compose exec app node dist/scripts/seed.js                                                                                                                    
+                                                                                                                                                                        
+# 2. In the dashboard — click "Sync from HighLevel"
+#    → pulls real HL agents, removes ghl-ag-1/2/3 fake ones automatically
+
+# 3. Reset before running simulations
+sudo docker compose exec app node dist/scripts/reset-demo.js
+
+# 4. Run simulations (against ghl-ag-1 which is the seeded Sophie agent)
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 pass
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 fail
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 partial
