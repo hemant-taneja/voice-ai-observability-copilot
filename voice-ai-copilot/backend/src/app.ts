@@ -18,6 +18,7 @@ app.use(helmet({
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       'frame-ancestors': ["'self'", 'https://*.gohighlevel.com', 'https://*.leadconnectorhq.com'],
+      'script-src': ["'self'", "'unsafe-inline'"], // required for /oauth/installing inline poll script
     },
   },
 }))
