@@ -31,17 +31,26 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
       return
     }
 
-    const { data } = await axios.post(
-      `${GHL_BASE}/oauth/token`,
-      {
-        client_id: config.ghlClientId,
-        client_secret: config.ghlClientSecret,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: `${config.appUrl}/oauth/callback`,
-      },
-      { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
-    )
+    const params = new URLSearchParams({
+      client_id:     config.ghlClientId!,
+      client_secret: config.ghlClientSecret!,
+      grant_type:    'authorization_code',
+      code,
+      user_type:     'Location',
+      redirect_uri:  `${config.appUrl}/oauth/callback`,
+    })
+
+    let data: Record<string, unknown>
+    try {
+      const resp = await axios.post(`${GHL_BASE}/oauth/token`, params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      })
+      data = resp.data
+    } catch (axiosErr: unknown) {
+      const e = axiosErr as { response?: { status: number; data: unknown } }
+      console.error('[oauth/callback] GHL token exchange failed:', e.response?.status, JSON.stringify(e.response?.data))
+      throw axiosErr
+    }
 
     const expiresAt = new Date(Date.now() + data.expires_in * 1000)
 
