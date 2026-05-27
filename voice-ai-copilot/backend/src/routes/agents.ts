@@ -4,7 +4,7 @@ import { ghlAuth } from '../middleware/ghl-auth'
 import { AgentsService } from '../services/agents-service'
 import { TranscriptService } from '../services/transcript-service'
 import { AppError } from '../middleware/error-handler'
-import { GHLClient } from '../lib/ghl-client'
+import { GHLClient, GHLClientError } from '../lib/ghl-client'
 import { config } from '../config'
 
 export const agentsRouter = Router()
@@ -38,7 +38,17 @@ agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: 
     console.log(`[agents/sync] GHL returned ${ghlAgents.length} agents for ${locationId}`, ghlAgents.map(a => ({ id: a.id, name: a.name })))
     const synced = await agentsService.upsertFromGHL(locationId, ghlAgents as unknown as Array<Record<string, unknown>>)
     res.json({ ok: true, synced })
-  } catch (err) { next(err) }
+  } catch (err) {
+    if (err instanceof GHLClientError) {
+      next(new AppError(
+        'Unable to sync agents from HighLevel',
+        502,
+        `GHL_SYNC_FAILED${err.upstreamStatus ? `_${err.upstreamStatus}` : ''}`
+      ))
+      return
+    }
+    next(err)
+  }
 })
 
 // GET /api/agents/:agentId/analysis?locationId=...

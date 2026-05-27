@@ -36,8 +36,14 @@ describe('GHLClient', () => {
     expect(agents).toHaveLength(1)
     expect(agents[0].name).toBe('Agent Alpha')
     expect(mockedAxios.get).toHaveBeenCalledWith(
-      expect.stringContaining('/locations/loc-123'),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }) })
+      expect.stringContaining('/voice-ai/agents'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer tok-abc',
+          Version: '2021-04-15',
+        }),
+        params: expect.objectContaining({ locationId: 'loc-123' }),
+      })
     )
   })
 

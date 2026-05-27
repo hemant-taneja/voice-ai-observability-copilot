@@ -10,6 +10,17 @@ interface TokenRow extends Record<string, unknown> {
   token_expires_at: Date | null
 }
 
+export class GHLClientError extends Error {
+  constructor(
+    message: string,
+    public readonly upstreamStatus?: number
+  ) {
+    super(message)
+    this.name = 'GHLClientError'
+    Error.captureStackTrace(this, this.constructor)
+  }
+}
+
 export class GHLClient {
   constructor(private readonly database: Database = defaultDb) {}
 
@@ -40,11 +51,21 @@ export class GHLClient {
     return data.access_token
   }
 
-  private async get<T>(path: string, locationId: string, retried = false): Promise<T> {
+  private async get<T>(
+    path: string,
+    locationId: string,
+    retried = false,
+    params?: Record<string, string | number>
+  ): Promise<T> {
     const token = await this.getToken(locationId)
     try {
       const { data } = await axios.get<T>(`${GHL_BASE}${path}`, {
-        headers: { Authorization: `Bearer ${token.access_token}`, Version: '2021-07-28' },
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          Version: '2021-04-15',
+          Accept: 'application/json',
+        },
+        params,
       })
       return data
     } catch (err: unknown) {
@@ -53,14 +74,16 @@ export class GHLClient {
         await this.refreshToken(locationId, token.refresh_token)
         return this.get<T>(path, locationId, true)
       }
-      throw err
+      throw new GHLClientError(`HighLevel request failed for ${path}`, status)
     }
   }
 
   async listAgents(locationId: string): Promise<GHLAgent[]> {
     const data = await this.get<{ agents: GHLAgent[] }>(
-      `/locations/${locationId}/voice-agents`,
-      locationId
+      '/voice-ai/agents',
+      locationId,
+      false,
+      { locationId, page: 1, pageSize: 100 }
     )
     return data.agents ?? []
   }

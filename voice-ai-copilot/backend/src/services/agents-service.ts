@@ -172,7 +172,7 @@ export class AgentsService {
     for (const agent of ghlAgents) {
       const id     = (agent.id ?? agent.agentId ?? agent._id) as string
       const name   = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
-      const script = (agent.script ?? agent.prompt ?? agent.systemPrompt ?? agent.voicePrompt ?? null) as string | null
+      const script = (agent.script ?? agent.prompt ?? agent.agentPrompt ?? agent.systemPrompt ?? agent.voicePrompt ?? null) as string | null
       await this.database.query(
         `INSERT INTO agents (location_id, ghl_agent_id, name, script)
          VALUES ($1, $2, $3, $4)
