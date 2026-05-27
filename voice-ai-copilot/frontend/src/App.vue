@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import AppSidebar from './components/AppSidebar.vue'
 import ToastContainer from './components/ToastContainer.vue'
@@ -21,6 +21,28 @@ import { useSSE } from './composables/useSSE'
 import { useToast } from './composables/useToast'
 
 const locationId = new URLSearchParams(window.location.search).get('locationId') ?? 'demo-location-001'
+
+// When embedded as a GHL custom page iframe, GHL does not inject {{location_id}}
+// reliably. Instead, request location context via postMessage and redirect once
+// with the correct locationId so the app re-initialises cleanly.
+onMounted(() => {
+  if (window.self === window.top) return // not inside an iframe — nothing to do
+
+  const handler = (event: MessageEvent) => {
+    const ghlLocationId = event.data?.payload?.locationId
+    if (event.data?.message === 'REQUEST_USER_DATA' && ghlLocationId) {
+      window.removeEventListener('message', handler)
+      if (ghlLocationId !== locationId) {
+        const url = new URL(window.location.href)
+        url.searchParams.set('locationId', ghlLocationId)
+        window.location.replace(url.toString())
+      }
+    }
+  }
+
+  window.addEventListener('message', handler)
+  window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
+})
 
 const streamStore  = useStreamStore()
 const agentsStore  = useAgentsStore()
