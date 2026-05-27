@@ -6,14 +6,14 @@
  *
  * Single shot:
  *   npm run simulate                          # random agent, random scenario
- *   npm run simulate -- agent-alpha           # specific agent, random scenario
- *   npm run simulate -- agent-alpha pass      # specific agent, specific outcome
+ *   npm run simulate -- ghl-ag-1              # specific agent, random scenario
+ *   npm run simulate -- ghl-ag-1 pass         # specific agent, specific outcome
  *
  * Batch mode (fires every scenario with a short stagger):
  *   npm run simulate -- all                   # all scenarios for all agents
- *   npm run simulate -- all agent-alpha       # all scenarios for one agent
+ *   npm run simulate -- all ghl-ag-1          # all scenarios for one agent
  *
- * Agent IDs: agent-alpha, agent-beta, agent-gamma
+ * Agent IDs: ghl-ag-1, ghl-ag-2, ghl-ag-3
  * Outcome types: pass, fail, partial
  */
 
@@ -34,9 +34,9 @@ const ARG2           = process.argv[3]   // agent-id (when arg1=all) | outcome |
 const BATCH_MODE     = ARG1 === 'all'
 const AGENT_GHL_ID   = BATCH_MODE
   ? (ARG2 ?? 'all')
-  : (ARG1 ?? pickRandom(['agent-alpha', 'agent-beta', 'agent-gamma']))
+  : (ARG1 ?? pickRandom(['ghl-ag-1', 'ghl-ag-2', 'ghl-ag-3']))
 const SCENARIO_TYPE  = (BATCH_MODE ? 'all' : (ARG2 ?? 'random')) as 'pass' | 'fail' | 'partial' | 'random' | 'all'
-const LOCATION_ID    = 'demo-location-001'
+const LOCATION_ID    = 'loc-seed-1'
 const BATCH_DELAY_MS = 1500  // stagger between batch sends
 
 type Turn = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }
@@ -49,7 +49,7 @@ type TestCase = { label: string; outcome: 'pass' | 'fail' | 'partial'; turns: Tu
 const CASES: Record<string, TestCase[]> = {
 
   // ── Sunrise Dental Booker ──────────────────────────────────
-  'agent-alpha': [
+  'ghl-ag-1': [
     {
       label: 'PASS — New patient booked, insurance confirmed',
       outcome: 'pass',
@@ -141,7 +141,7 @@ const CASES: Record<string, TestCase[]> = {
   ],
 
   // ── Summit RE Qualifier ────────────────────────────────────
-  'agent-beta': [
+  'ghl-ag-2': [
     {
       label: 'PASS — Budget, timeline, location all qualified',
       outcome: 'pass',
@@ -221,7 +221,7 @@ const CASES: Record<string, TestCase[]> = {
   ],
 
   // ── TechPro Re-Engagement ──────────────────────────────────
-  'agent-gamma': [
+  'ghl-ag-3': [
     {
       label: 'PASS — Lead re-engaged, demo booked',
       outcome: 'pass',
@@ -323,7 +323,7 @@ function pickRandom<T>(arr: T[]): T {
 }
 
 function pickCase(agentId: string, type: 'pass' | 'fail' | 'partial' | 'random'): TestCase {
-  const pool = CASES[agentId] ?? CASES['agent-alpha']
+  const pool = CASES[agentId] ?? CASES['ghl-ag-1']
   if (type === 'random') return pickRandom(pool)
   const filtered = pool.filter((c) => c.outcome === type)
   return filtered.length ? pickRandom(filtered) : pickRandom(pool)
