@@ -52,13 +52,13 @@ Important routes:
 
 I handled the project as a "Team of One" across product, design, engineering, and QA.
 
-**Product:** I scoped the product around the highest-value pain point: managers need to know whether Voice AI agents are actually following goals and creating good outcomes without listening to every call. The core loop is install, sync agents, configure KPI goals, ingest transcripts, review analysis, and improve scripts.
+**Product:** I scoped the product around the highest-value pain point: managers need to know whether Voice AI agents are actually following goals and creating good outcomes without listening to every call. The core loop is install, sync agents, configure KPI goals, ingest transcripts, review analysis, and improve scripts. I also added a Playground so agents and KPI goals can be tested with synthetic conversations before relying on live calls.
 
 **Design:** I designed the dashboard around operational review rather than a marketing-style interface. The main views prioritize scanability: agent health, pass/fail status, KPI scores, transcript moments, use-action flags, and script suggestions. The goal was to make the next action obvious to a manager or QA reviewer.
 
 **Engineering:** I built the backend as an event-driven pipeline. OAuth stores location tokens, agent sync pulls real HighLevel Voice AI agents, transcript ingestion is idempotent, Temporal handles retryable analysis workflows, and SSE keeps the frontend updated without polling. LLM scoring is structured, while the final overall score is calculated deterministically from weighted KPI goals.
 
-**QA:** I tested the system with seeded local data and mock webhook simulations. The mock flow exercises the same backend path used by live transcripts: webhook receipt, transcript persistence, Temporal workflow, LLM analysis, database persistence, and dashboard refresh. I also documented sandbox setup and known integration limits so reviewers can distinguish completed behavior from account-dependent behavior.
+**QA:** I tested the system with seeded local data, the Playground, and mock webhook simulations. The Playground validates agent/KPI behavior from the UI, while the mock webhook flow exercises the same backend path used by live transcripts: webhook receipt, transcript persistence, Temporal workflow, LLM analysis, database persistence, and dashboard refresh. I also documented sandbox setup and known integration limits so reviewers can distinguish completed behavior from account-dependent behavior.
 
 ## Functional vs Mocked
 
@@ -96,4 +96,3 @@ The shortest sandbox review path is:
 ## Known Limitation
 
 The live HighLevel transcript webhook could not be tested end to end because the required Voice AI integrations were not available on my account. The receiving endpoint and analysis pipeline are implemented, and the same server-side path has been validated through mock webhook simulation.
-
