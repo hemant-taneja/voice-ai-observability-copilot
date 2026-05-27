@@ -166,6 +166,19 @@ export class AgentsService {
     return { kpiConfigId, ghlAgentId }
   }
 
+  async upsertFromGHL(locationId: string, ghlAgents: Array<{ id: string; name: string }>): Promise<number> {
+    for (const agent of ghlAgents) {
+      await this.database.query(
+        `INSERT INTO agents (location_id, ghl_agent_id, name)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (location_id, ghl_agent_id) DO UPDATE
+         SET name = EXCLUDED.name, updated_at = NOW()`,
+        [locationId, agent.id, agent.name]
+      )
+    }
+    return ghlAgents.length
+  }
+
   async updateScript(agentId: string, locationId: string, script: string): Promise<void> {
     const { rowCount } = await this.database.query(
       'UPDATE agents SET script = $1, updated_at = NOW() WHERE id = $2 AND location_id = $3',

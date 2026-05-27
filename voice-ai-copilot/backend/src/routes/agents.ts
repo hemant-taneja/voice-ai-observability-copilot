@@ -1,10 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express'
+import axios from 'axios'
 import { Client, Connection } from '@temporalio/client'
 import { ghlAuth } from '../middleware/ghl-auth'
 import { AgentsService } from '../services/agents-service'
 import { TranscriptService } from '../services/transcript-service'
 import { AppError } from '../middleware/error-handler'
 import { config } from '../config'
+import { db } from '../db/index'
+
+const GHL_BASE = 'https://services.leadconnectorhq.com'
 
 export const agentsRouter = Router()
 const agentsService = new AgentsService()
@@ -25,6 +29,33 @@ agentsRouter.get('/', ghlAuth(), async (req: Request, res: Response, next: NextF
     const locationId = (req as any).locationId as string
     const agents = await agentsService.listByLocation(locationId)
     res.json(agents)
+  } catch (err) { next(err) }
+})
+
+// POST /api/agents/sync  — pull agents from GHL Voice AI API and upsert into DB
+agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const locationId = (req as any).locationId as string
+
+    const { rows } = await db.query<{ access_token: string }>(
+      'SELECT access_token FROM locations WHERE location_id = $1',
+      [locationId]
+    )
+    if (!rows[0]?.access_token) throw new AppError('No access token for location', 401, 'UNAUTHORIZED')
+
+    const { data } = await axios.get(`${GHL_BASE}/voice-ai/agents`, {
+      params: { locationId },
+      headers: {
+        Authorization: `Bearer ${rows[0].access_token}`,
+        Version: '2021-07-28',
+        Accept: 'application/json',
+      },
+    })
+
+    const ghlAgents = (data.agents ?? data.data ?? []) as Array<{ id: string; name: string }>
+    const synced = await agentsService.upsertFromGHL(locationId, ghlAgents)
+
+    res.json({ ok: true, synced })
   } catch (err) { next(err) }
 })
 
