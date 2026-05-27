@@ -31,20 +31,20 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
       return
     }
 
-    const params = new URLSearchParams({
-      client_id:     config.ghlClientId!,
-      client_secret: config.ghlClientSecret!,
-      grant_type:    'authorization_code',
-      code,
-      user_type:     'Location',
-      redirect_uri:  `${config.appUrl}/oauth/callback`,
-    })
-
     let data: Record<string, unknown>
     try {
-      const resp = await axios.post(`${GHL_BASE}/oauth/token`, params.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-      })
+      const resp = await axios.post(
+        `${GHL_BASE}/oauth/token`,
+        {
+          client_id:     config.ghlClientId,
+          client_secret: config.ghlClientSecret,
+          grant_type:    'authorization_code',
+          code,
+          user_type:     'Location',
+          redirect_uri:  `${config.appUrl}/oauth/callback`,
+        },
+        { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
+      )
       data = resp.data
     } catch (axiosErr: unknown) {
       const e = axiosErr as { response?: { status: number; data: unknown } }
