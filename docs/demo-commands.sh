@@ -5,56 +5,59 @@
 #  All commands run on the GCP VM (SSH in first).
 # =============================================================
 
-# SSH into VM (run locally if not already connected)
+# ── Connect to VM ─────────────────────────────────────────────
 #   ssh hemanttaneja30@35.207.209.250
 
-# SSH tunnel for Temporal UI (run locally, keep terminal open)
+# ── Temporal UI tunnel (keep open in a separate local terminal) ─
 #   ssh -L 8080:localhost:8080 hemanttaneja30@35.207.209.250
-#   then open: http://localhost:8080
+#   Open: http://localhost:8080
+
 
 # =============================================================
-#  DASHBOARD URL  (open in browser before demo)
+#  DASHBOARD URL
 #  https://voice-agent-copilot.duckdns.org?locationId=TJkIaqSqj7jectw2dxRx
-#
-#  Or open via the HighLevel marketplace iframe (preferred for demo)
-#  — locationId is injected automatically in that case.
+#  (or open from the HighLevel marketplace iframe — locationId injected automatically)
 # =============================================================
 
-# =============================================================
-#  AGENT GHL ID
-#  After syncing from HL, check which agent ID to use:
-#    sudo docker compose exec app node -e "
-#      const {db} = require('./dist/db/index');
-#      db.query(\"SELECT ghl_agent_id, name FROM agents WHERE location_id='TJkIaqSqj7jectw2dxRx'\").then(r=>{console.log(r.rows);process.exit()})
-#    "
-#  Replace <AGENT_ID> below with the ghl_agent_id of the agent to demo.
-# =============================================================
-AGENT_ID=ghl-ag-1   # ← update this after first sync
+
+# ════════════════════════════════════════════════════════════
+#  DEMO SETUP  (run once before demo, in order)
+# ════════════════════════════════════════════════════════════
+
+# STEP 1 — Seed demo agents + sample call history
+#   Creates Aria, Marcus, Sophie with KPI configs and 3 pre-analyzed calls.
+#   Safe to re-run: preserves OAuth token and any real HL-synced agents.
+sudo docker compose exec app node dist/scripts/seed.js
 
 
-# ── CLEAR ALL LOCATION DATA (fresh install / troubleshooting) ─
-sudo docker compose exec postgres psql -U postgres -d voice_copilot -c "TRUNCATE locations CASCADE;"
+# STEP 2 — (Optional) Confirm which agents are in the DB
+sudo docker compose exec app node -e "
+const {db}=require('./dist/db/index');
+db.query(\"SELECT ghl_agent_id, name FROM agents WHERE location_id='TJkIaqSqj7jectw2dxRx'\")
+  .then(r=>{console.log(r.rows);process.exit()})
+"
 
 
-# ── STEP 0: Reset before demo ────────────────────────────────
+# ════════════════════════════════════════════════════════════
+#  DEMO RESET  (use between demo runs to clear call data)
+# ════════════════════════════════════════════════════════════
 sudo docker compose exec app node dist/scripts/reset-demo.js
 
 
-# ── STEP 1: Simulation — PASS ────────────────────────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" pass
+# ════════════════════════════════════════════════════════════
+#  SIMULATIONS  (Section 3 of demo — run in order)
+#  Default agent is ghl-ag-1 (Sophie — Dental Care Coordinator).
+#  Pass a different ghl_agent_id as first arg if needed.
+# ════════════════════════════════════════════════════════════
 
+# Pass
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 pass
 
-# ── STEP 2: Simulation — FAIL ────────────────────────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" fail
+# Fail
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 fail
 
+# Partial  ← main demo moment
+sudo docker compose exec app node dist/scripts/simulate-webhook.js ghl-ag-1 partial
 
-# ── STEP 3: Simulation — PARTIAL (main demo case) ────────────
-sudo docker compose exec app node dist/scripts/simulate-webhook.js "$AGENT_ID" partial
-
-
-# ── ALL 3 IN ONE GO (alternative, 2s stagger between each) ───
+# All 3 at once (2s stagger)
 sudo docker compose exec app node dist/scripts/simulate-webhook.js all
-
-
-# ── RESET AGAIN (if re-running the demo) ─────────────────────
-sudo docker compose exec app node dist/scripts/reset-demo.js

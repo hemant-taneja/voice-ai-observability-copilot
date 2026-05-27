@@ -20,8 +20,11 @@ async function seed() {
       [LOCATION_ID]
     )
 
-    // Clear existing agent data for this location (cascades to transcripts + analyses)
-    await client.query('DELETE FROM agents WHERE location_id = $1', [LOCATION_ID])
+    // Remove only the fake demo agents — preserve any real HL-synced agents
+    await client.query(
+      `DELETE FROM agents WHERE location_id = $1 AND ghl_agent_id IN ('ghl-ag-1','ghl-ag-2','ghl-ag-3')`,
+      [LOCATION_ID]
+    )
 
     // ── Agents ────────────────────────────────────────────────
     const agents = [

@@ -1,18 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express'
-import axios from 'axios'
 import { Client, Connection } from '@temporalio/client'
 import { ghlAuth } from '../middleware/ghl-auth'
 import { AgentsService } from '../services/agents-service'
 import { TranscriptService } from '../services/transcript-service'
 import { AppError } from '../middleware/error-handler'
+import { GHLClient } from '../lib/ghl-client'
 import { config } from '../config'
-import { db } from '../db/index'
-
-const GHL_BASE = 'https://services.leadconnectorhq.com'
 
 export const agentsRouter = Router()
 const agentsService = new AgentsService()
 const transcriptService = new TranscriptService()
+const ghlClient = new GHLClient()
 
 let temporalClient: Client | null = null
 async function getTemporalClient(): Promise<Client> {
@@ -36,26 +34,9 @@ agentsRouter.get('/', ghlAuth(), async (req: Request, res: Response, next: NextF
 agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const locationId = (req as any).locationId as string
-
-    const { rows } = await db.query<{ access_token: string }>(
-      'SELECT access_token FROM locations WHERE location_id = $1',
-      [locationId]
-    )
-    if (!rows[0]?.access_token) throw new AppError('No access token for location', 401, 'UNAUTHORIZED')
-
-    const { data } = await axios.get(`${GHL_BASE}/voice-ai/agents`, {
-      params: { locationId },
-      headers: {
-        Authorization: `Bearer ${rows[0].access_token}`,
-        Version: '2021-07-28',
-        Accept: 'application/json',
-      },
-    })
-
-    const ghlAgents = (data.agents ?? data.data ?? []) as Array<Record<string, unknown>>
-    console.log('[agents/sync] GHL response keys:', Object.keys(data), '| first agent:', JSON.stringify(ghlAgents[0]))
-    const synced = await agentsService.upsertFromGHL(locationId, ghlAgents)
-
+    const ghlAgents = await ghlClient.listAgents(locationId)
+    console.log(`[agents/sync] GHL returned ${ghlAgents.length} agents for ${locationId}`, ghlAgents.map(a => ({ id: a.id, name: a.name })))
+    const synced = await agentsService.upsertFromGHL(locationId, ghlAgents as unknown as Array<Record<string, unknown>>)
     res.json({ ok: true, synced })
   } catch (err) { next(err) }
 })
