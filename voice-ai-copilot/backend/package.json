@@ -12,7 +12,8 @@
     "migrate": "ts-node src/db/migrate.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "simulate": "ts-node src/scripts/simulate-webhook.ts",
-    "simulate:all": "ts-node src/scripts/simulate-webhook.ts all"
+    "simulate:all": "ts-node src/scripts/simulate-webhook.ts all",
+    "reset-demo": "ts-node src/scripts/reset-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
