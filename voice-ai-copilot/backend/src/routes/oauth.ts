@@ -89,9 +89,16 @@ oauthRouter.get('/callback', async (req: Request, res: Response, next: NextFunct
              token_expires_at = EXCLUDED.token_expires_at`,
         [`company:${data.companyId}`, data.access_token, data.refresh_token, expiresAt]
       )
-      const redirectLocation = qsLocationId ?? data.locationId
-      res.redirect(redirectLocation
-        ? `${config.appUrl ?? '/'}/?locationId=${redirectLocation}&installed=1`
+      // Try to find an already-minted location token for this company
+      const { rows: locationRows } = await db.query<{ location_id: string }>(
+        `SELECT location_id FROM locations
+         WHERE company_id = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [data.companyId]
+      )
+      const resolvedLocationId = qsLocationId ?? locationRows[0]?.location_id
+      res.redirect(resolvedLocationId
+        ? `${config.appUrl ?? '/'}/?locationId=${resolvedLocationId}&installed=1`
         : `${config.appUrl ?? '/'}/?installed=1`
       )
     } else {

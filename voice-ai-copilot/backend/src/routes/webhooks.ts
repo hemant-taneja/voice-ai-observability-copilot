@@ -103,13 +103,14 @@ async function mintAndStoreLocationToken(
 
   const expiresAt = new Date(Date.now() + data.expires_in * 1000)
   await db.query(
-    `INSERT INTO locations (location_id, access_token, refresh_token, token_expires_at)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO locations (location_id, company_id, access_token, refresh_token, token_expires_at)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (location_id) DO UPDATE
-     SET access_token     = EXCLUDED.access_token,
+     SET company_id       = EXCLUDED.company_id,
+         access_token     = EXCLUDED.access_token,
          refresh_token    = EXCLUDED.refresh_token,
          token_expires_at = EXCLUDED.token_expires_at`,
-    [locationId, data.access_token, data.refresh_token ?? null, expiresAt]
+    [locationId, companyId, data.access_token, data.refresh_token ?? null, expiresAt]
   )
 }
 
