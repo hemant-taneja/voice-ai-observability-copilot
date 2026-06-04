@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import AgentDetail from './AgentDetail.vue'
+import { useStreamStore } from '../stores/stream'
 import type { TranscriptCard } from '../types/analysis.types'
 
 const MULTI = vi.hoisted((): TranscriptCard[] => [
@@ -50,6 +51,7 @@ const STUBS = {
 
 async function mountDetail() {
   const pinia = createPinia()
+  setActivePinia(pinia) // let tests reach the same store instances the component uses
   router.push('/agents/ag-1?locationId=loc-1')
   await router.isReady()
   const wrapper = mount(AgentDetail, {
@@ -108,5 +110,41 @@ describe('AgentDetail version selector', () => {
     ])
     const wrapper = await mountDetail()
     expect(wrapper.find('[data-testid="version-badge"]').exists()).toBe(false)
+  })
+
+  it('keeps the user on the version they were reading when a re-analysis arrives via SSE', async () => {
+    const wrapper = await mountDetail()
+    await wrapper.find('.transcript-row').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Navigate to the oldest version (v1, id a1)
+    const select = document.querySelector('[data-testid="version-select"]') as HTMLSelectElement
+    select.value = '2'
+    select.dispatchEvent(new Event('change'))
+    await wrapper.vm.$nextTick()
+    expect(document.body.textContent).toContain('SUMMARY V1')
+
+    // A re-analysis completes: a brand-new newest version (a4) prepends to the array
+    const { analysisApi } = await import('../api/analysis')
+    ;(analysisApi.getByAgent as any).mockResolvedValueOnce([
+      {
+        ...MULTI[0],
+        analyses: [
+          { id: 'a4', overallScore: 0.8, passed: true, kpiScores: [], summary: 'SUMMARY V4', analyzedAt: '2026-06-04T18:00:00Z', scriptSuggestions: [], useActions: [] },
+          ...MULTI[0].analyses,
+        ],
+      },
+    ])
+
+    useStreamStore().setLastEvent({ type: 'analysis.complete', agentId: 'ghl-ag-1' })
+    await new Promise((r) => setTimeout(r, 20))
+    await wrapper.vm.$nextTick()
+
+    // Still reading a1 (now relocated to index 3), NOT yanked to the new latest a4
+    const select2 = document.querySelector('[data-testid="version-select"]') as HTMLSelectElement
+    expect(select2.options.length).toBe(4)
+    expect(select2.value).toBe('3')
+    expect(document.body.textContent).toContain('SUMMARY V1')
+    expect(document.body.textContent).not.toContain('SUMMARY V4')
   })
 })
