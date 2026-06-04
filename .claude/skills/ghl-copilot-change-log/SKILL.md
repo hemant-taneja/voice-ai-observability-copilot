@@ -1,11 +1,11 @@
 ---
 name: ghl-copilot-change-log
-description: Use after completing any feature, bugfix, or architectural change in the Voice AI Observability Copilot, before committing, to update the structured project changelog.
+description: This skill should be used after completing any feature, bugfix, or architectural change in the Voice AI Observability Copilot, before committing. Also triggers when the user says "update the changelog", "log this change", "what changed", or needs to maintain the structured project changelog at `voice-ai-copilot/CHANGELOG.md`.
 ---
 
 # Maintaining the GHL Copilot Changelog
 
-The changelog lives at `CHANGELOG.md` in the project root.
+The changelog lives at `voice-ai-copilot/CHANGELOG.md`.
 Follows [Keep a Changelog](https://keepachangelog.com) + [Semantic Versioning](https://semver.org).
 
 ## Format
@@ -55,7 +55,7 @@ Follows [Keep a Changelog](https://keepachangelog.com) + [Semantic Versioning](h
 
 ## On Release
 
-When cutting a release, rename `[Unreleased]` to the version + date, then add a fresh `[Unreleased]` block above it:
+Rename `[Unreleased]` to the version + date, then add a fresh `[Unreleased]` block above it:
 
 ```markdown
 ## [Unreleased]
@@ -67,7 +67,7 @@ When cutting a release, rename `[Unreleased]` to the version + date, then add a 
 
 ## CHANGELOG.md Bootstrap
 
-If `CHANGELOG.md` does not exist yet, create it with:
+If `voice-ai-copilot/CHANGELOG.md` does not exist yet, create it with:
 
 ```markdown
 # Changelog

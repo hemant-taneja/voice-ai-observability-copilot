@@ -1,0 +1,9 @@
+{
+  "name": "ghl-copilot",
+  "description": "Voice AI Observability Copilot — skills, commands, and documentation for the HighLevel Voice AI project",
+  "version": "2.0.0",
+  "author": {
+    "name": "HighLevel FSB"
+  },
+  "keywords": ["highlevel", "voice-ai", "observability", "copilot", "ghl", "node", "vue", "temporal", "express", "pinia"]
+}
