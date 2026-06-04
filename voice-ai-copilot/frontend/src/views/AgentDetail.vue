@@ -159,6 +159,7 @@
                   {{ pct(latestAnalysis(tc)!.overallScore) }}
                 </span>
                 <span v-else class="score-val pending">—</span>
+                <span v-if="tc.analyses.length > 1" data-testid="version-badge" class="version-badge mono">v{{ tc.analyses.length }}</span>
               </td>
               <td class="col-result">
                 <span v-if="latestAnalysis(tc)" class="result-chip" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
@@ -932,7 +933,7 @@ function formatDuration(seconds: number | null | undefined): string {
   vertical-align: middle;
 }
 
-.col-score { width: 72px; }
+.col-score { width: 100px; white-space: nowrap; }
 .col-result { width: 80px; }
 .col-date { width: 150px; }
 .col-duration { width: 80px; }
@@ -947,6 +948,19 @@ function formatDuration(seconds: number | null | undefined): string {
 .score-val.pass { color: var(--pass); }
 .score-val.fail { color: var(--fail); }
 .score-val.pending { color: var(--text-muted); }
+
+.version-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
 
 .result-chip {
   display: inline-block;

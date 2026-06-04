@@ -93,4 +93,20 @@ describe('AgentDetail version selector', () => {
     expect(document.body.textContent).toContain('SUMMARY V1')
     expect(document.body.textContent).not.toContain('SUMMARY V3')
   })
+
+  it('shows a version badge in the table only when a transcript has multiple analyses', async () => {
+    const wrapper = await mountDetail()
+    const badge = wrapper.find('[data-testid="version-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('v3')
+  })
+
+  it('hides the version badge for a single-analysis transcript', async () => {
+    const { analysisApi } = await import('../api/analysis')
+    ;(analysisApi.getByAgent as any).mockResolvedValueOnce([
+      { ...MULTI[0], analyses: [MULTI[0].analyses[0]] },
+    ])
+    const wrapper = await mountDetail()
+    expect(wrapper.find('[data-testid="version-badge"]').exists()).toBe(false)
+  })
 })
