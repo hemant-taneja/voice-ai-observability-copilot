@@ -84,18 +84,25 @@ When an `analysis.complete` / `analysis.failed` event arrives for the open
 transcript (`AgentDetail.vue` watcher ~L369-386), the card is refetched and a new
 latest version may prepend to `analyses` (index 0).
 
-Decision: **preserve the version the user is reading.**
-- If the user was on latest (`selectedVersionIndex === 0`), keep them on index 0 —
-  they now see the new latest. (No action needed; index 0 still points at latest.)
-- If the user was on an older version (`selectedVersionIndex > 0`), the array grew
-  by one at the front, so the previously-selected version shifts by one index. To
-  keep showing the *same* analysis, increment `selectedVersionIndex` by the number
-  of newly-prepended versions. Implementation: capture the selected analysis `id`
-  before refetch and, after refetch, set `selectedVersionIndex` to the index of
-  that same `id` in the fresh `analyses` (fallback to 0 if not found).
+Decision (two-mode, by previous selection):
+- **If the user was on latest** (`selectedVersionIndex === 0` before refresh):
+  follow latest — stay at index 0, which now points at the freshly-completed
+  analysis. (Watching the latest and a re-analysis lands → you see the new result.)
+- **If the user was on an older version** (`selectedVersionIndex > 0`): stay on the
+  *same* analysis they were deliberately reading. Because a new version prepends at
+  index 0, that analysis's index shifts; we re-locate it by its stable `id`.
 
-The id-tracking approach is robust regardless of how many versions arrive and is
-the single source of truth for "stay on the version I was reading".
+Implementation: capture the selected analysis `id` **and** the previous index
+before refetch. After refetch, compute the new index with a pure helper:
+
+```ts
+// prevIndex 0 (or no prior id) -> 0 (follow latest)
+// otherwise -> index of prevId in fresh analyses, or 0 if it vanished
+selectedIndexAfterRefresh(prevIndex, prevId, freshAnalyses)
+```
+
+Tracking by `id` (not position) makes the "stay on the version I was reading" case
+robust regardless of how many versions arrive at once.
 
 ## Testing
 
