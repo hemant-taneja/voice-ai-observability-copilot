@@ -159,6 +159,7 @@
                   {{ pct(latestAnalysis(tc)!.overallScore) }}
                 </span>
                 <span v-else class="score-val pending">—</span>
+                <span v-if="tc.analyses.length > 1" data-testid="version-badge" class="version-badge mono">v{{ tc.analyses.length }}</span>
               </td>
               <td class="col-result">
                 <span v-if="latestAnalysis(tc)" class="result-chip" :class="latestAnalysis(tc)!.passed ? 'pass' : 'fail'">
@@ -197,9 +198,19 @@
               <div class="drawer-header">
                 <div class="drawer-title-row">
                   <span class="drawer-title">Call Analysis</span>
-                  <span v-if="drawerCard && latestAnalysis(drawerCard)" class="result-chip" :class="latestAnalysis(drawerCard)!.passed ? 'pass' : 'fail'">
-                    {{ latestAnalysis(drawerCard)!.passed ? 'Pass' : 'Fail' }}
+                  <span v-if="drawerCard && selectedAnalysis" class="result-chip" :class="selectedAnalysis!.passed ? 'pass' : 'fail'">
+                    {{ selectedAnalysis!.passed ? 'Pass' : 'Fail' }}
                   </span>
+                  <select
+                    v-if="drawerCard && drawerCard.analyses.length"
+                    data-testid="version-select"
+                    class="version-select mono"
+                    v-model.number="selectedVersionIndex"
+                  >
+                    <option v-for="(a, i) in drawerCard.analyses" :key="a.id" :value="i">
+                      {{ versionLabel(i, drawerCard.analyses.length) }}
+                    </option>
+                  </select>
                 </div>
                 <button class="drawer-close" @click="closeDrawer">✕</button>
               </div>
@@ -209,8 +220,8 @@
                 <div class="drawer-meta">
                   <div class="drawer-meta-item">
                     <span class="meta-label">Score</span>
-                    <span class="meta-val score-large" :class="latestAnalysis(drawerCard)?.passed ? 'pass' : 'fail'">
-                      {{ latestAnalysis(drawerCard) ? pct(latestAnalysis(drawerCard)!.overallScore) : '—' }}
+                    <span class="meta-val score-large" :class="selectedAnalysis?.passed ? 'pass' : 'fail'">
+                      {{ selectedAnalysis ? pct(selectedAnalysis!.overallScore) : '—' }}
                     </span>
                   </div>
                   <div class="drawer-meta-item">
@@ -223,22 +234,22 @@
                   </div>
                   <div class="drawer-meta-item">
                     <span class="meta-label">Model</span>
-                    <span class="meta-val mono">{{ (latestAnalysis(drawerCard) as any)?.llmModel ?? '—' }}</span>
+                    <span class="meta-val mono">{{ (selectedAnalysis as any)?.llmModel ?? '—' }}</span>
                   </div>
                 </div>
 
                 <!-- Summary -->
-                <div v-if="latestAnalysis(drawerCard)?.summary" class="drawer-block">
+                <div v-if="selectedAnalysis?.summary" class="drawer-block">
                   <h3 class="drawer-block-title">Summary</h3>
-                  <p class="drawer-summary">{{ latestAnalysis(drawerCard)!.summary }}</p>
+                  <p class="drawer-summary">{{ selectedAnalysis!.summary }}</p>
                 </div>
 
                 <!-- KPI Scores -->
-                <div v-if="latestAnalysis(drawerCard)?.kpiScores?.length" class="drawer-block">
+                <div v-if="selectedAnalysis?.kpiScores?.length" class="drawer-block">
                   <h3 class="drawer-block-title">KPI Scores</h3>
                   <div class="kpi-score-list">
                     <div
-                      v-for="k in latestAnalysis(drawerCard)!.kpiScores"
+                      v-for="k in selectedAnalysis!.kpiScores"
                       :key="k.goal"
                       class="kpi-score-row"
                       :class="k.passed ? 'pass' : 'fail'"
@@ -253,11 +264,11 @@
                 </div>
 
                 <!-- Use Actions -->
-                <div v-if="latestAnalysis(drawerCard)?.useActions?.length" class="drawer-block">
+                <div v-if="selectedAnalysis?.useActions?.length" class="drawer-block">
                   <h3 class="drawer-block-title">Use Actions</h3>
                   <div class="use-actions-list">
                     <UseActionBadge
-                      v-for="ua in latestAnalysis(drawerCard)!.useActions"
+                      v-for="ua in selectedAnalysis!.useActions"
                       :key="ua.id ?? ua.description"
                       :type="ua.type"
                       :description="ua.description"
@@ -273,7 +284,7 @@
                   <h3 class="drawer-block-title">Transcript</h3>
                   <TranscriptViewer
                     :turns="drawerCard.turns"
-                    :useActions="latestAnalysis(drawerCard)?.useActions ?? []"
+                    :useActions="selectedAnalysis?.useActions ?? []"
                   />
                 </div>
 
@@ -316,6 +327,7 @@ import KpiScoreBar from '../components/KpiScoreBar.vue'
 import TranscriptViewer from '../components/TranscriptViewer.vue'
 import ScriptSuggestionsPanel from '../components/ScriptSuggestionsPanel.vue'
 import ScriptDiffPanel from '../components/ScriptDiffPanel.vue'
+import { versionLabel, selectedIndexAfterRefresh } from './agent-detail-versions'
 
 const props = defineProps<{ locationId: string }>()
 
@@ -351,8 +363,16 @@ const bannerDismissed = ref(false)
 const drawerOpen = ref(false)
 const drawerCard = ref<TranscriptCard | null>(null)
 
+// Which analysis version is shown in the drawer (index into drawerCard.analyses,
+// 0 = latest). Reset to latest whenever a transcript's drawer opens.
+const selectedVersionIndex = ref(0)
+const selectedAnalysis = computed<AnalysisVersion | null>(
+  () => drawerCard.value?.analyses[selectedVersionIndex.value] ?? null,
+)
+
 function openDrawer(tc: TranscriptCard) {
   drawerCard.value = tc
+  selectedVersionIndex.value = 0
   drawerOpen.value = true
 }
 
@@ -378,10 +398,16 @@ watch(() => streamStore.lastEvent, async (event) => {
   transcriptCards.value = fresh
   agent.value = freshAgent
 
-  // Sync the open drawer card so analysis renders without closing it
+  // Sync the open drawer card so analysis renders without closing it, keeping the
+  // user on the version they were reading (or following latest if they were on it).
   if (drawerCard.value) {
+    const prevIndex = selectedVersionIndex.value
+    const prevId = selectedAnalysis.value?.id ?? null
     const updated = fresh.find((tc) => tc.transcriptId === drawerCard.value!.transcriptId)
-    if (updated) drawerCard.value = updated
+    if (updated) {
+      drawerCard.value = updated
+      selectedVersionIndex.value = selectedIndexAfterRefresh(prevIndex, prevId, updated.analyses)
+    }
   }
 })
 
@@ -907,7 +933,7 @@ function formatDuration(seconds: number | null | undefined): string {
   vertical-align: middle;
 }
 
-.col-score { width: 72px; }
+.col-score { width: 100px; white-space: nowrap; }
 .col-result { width: 80px; }
 .col-date { width: 150px; }
 .col-duration { width: 80px; }
@@ -922,6 +948,19 @@ function formatDuration(seconds: number | null | undefined): string {
 .score-val.pass { color: var(--pass); }
 .score-val.fail { color: var(--fail); }
 .score-val.pending { color: var(--text-muted); }
+
+.version-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
 
 .result-chip {
   display: inline-block;
@@ -992,6 +1031,19 @@ function formatDuration(seconds: number | null | undefined): string {
   font-weight: 700;
   color: var(--text-2);
 }
+
+.version-select {
+  margin-left: 8px;
+  background: var(--bg-surface);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.version-select:focus { outline: none; border-color: var(--accent); }
 
 .drawer-close {
   background: none;

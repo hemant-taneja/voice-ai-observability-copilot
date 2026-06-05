@@ -22,6 +22,17 @@ const schema = z.object({
   groqApiKey: z.string().optional(),
   port: z.coerce.number().default(3000),
   nodeEnv: z.enum(['development', 'test', 'production']).default('development'),
+}).superRefine((cfg, ctx) => {
+  // Webhook signatures are meaningless if the HMAC secret is missing or left at
+  // the publicly-known default. Tolerate the default in dev/test for ergonomics,
+  // but refuse to boot in production rather than silently accept forgeable webhooks.
+  if (cfg.nodeEnv === 'production' && (!cfg.ghlWebhookSecret || cfg.ghlWebhookSecret === 'changeme')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ghlWebhookSecret'],
+      message: 'GHL_WEBHOOK_SECRET must be set to a real value in production (not the default).',
+    })
+  }
 })
 
 const result = schema.safeParse({

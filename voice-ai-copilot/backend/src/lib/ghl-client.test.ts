@@ -47,6 +47,28 @@ describe('GHLClient', () => {
     )
   })
 
+  it('sends the token refresh as application/x-www-form-urlencoded (GHL rejects JSON)', async () => {
+    mockedAxios.get
+      .mockRejectedValueOnce({ response: { status: 401 } })
+      .mockResolvedValueOnce({ data: { agents: [] } })
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { access_token: 'new-tok', refresh_token: 'new-ref', expires_in: 86400 },
+    })
+    ;(mockDb.query as jest.Mock)
+      .mockResolvedValueOnce({ rows: [{ access_token: 'old-tok', refresh_token: 'ref-xyz', token_expires_at: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ access_token: 'new-tok', refresh_token: 'new-ref', token_expires_at: null }] })
+
+    const client = new GHLClient(mockDb as Database)
+    await client.listAgents('loc-123')
+
+    // GHL's /oauth/token requires form-encoding; a plain object would serialize as JSON and 400.
+    const body = mockedAxios.post.mock.calls[0][1]
+    expect(body).toBeInstanceOf(URLSearchParams)
+    expect((body as URLSearchParams).get('grant_type')).toBe('refresh_token')
+    expect((body as URLSearchParams).get('refresh_token')).toBe('ref-xyz')
+  })
+
   it('retries with refreshed token on 401', async () => {
     mockedAxios.get
       .mockRejectedValueOnce({ response: { status: 401 } })

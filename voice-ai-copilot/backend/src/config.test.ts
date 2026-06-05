@@ -38,9 +38,23 @@ describe('config', () => {
     expect(() => require('./config')).toThrow()
   })
 
-  it('throws when GHL_WEBHOOK_SECRET is missing', () => {
+  it('does not throw outside production when GHL_WEBHOOK_SECRET is missing (uses default)', () => {
     setValidEnv()
     delete process.env.GHL_WEBHOOK_SECRET
+    expect(() => require('./config')).not.toThrow()
+  })
+
+  it('throws in production when GHL_WEBHOOK_SECRET is left at the insecure default', () => {
+    setValidEnv()
+    process.env.NODE_ENV = 'production'
+    process.env.GHL_WEBHOOK_SECRET = 'changeme'
     expect(() => require('./config')).toThrow()
+  })
+
+  it('loads in production when GHL_WEBHOOK_SECRET is set to a real value', () => {
+    setValidEnv()
+    process.env.NODE_ENV = 'production'
+    process.env.GHL_WEBHOOK_SECRET = 'a-real-production-secret'
+    expect(() => require('./config')).not.toThrow()
   })
 })
