@@ -35,11 +35,18 @@ export class GHLClient {
   }
 
   private async refreshToken(locationId: string, refreshToken: string): Promise<string> {
-    const { data } = await axios.post(`${GHL_BASE}/oauth/token`, {
+    // GHL's /oauth/token requires application/x-www-form-urlencoded — a plain
+    // object serializes as JSON and is rejected with 400 invalid_request.
+    // Mirrors the working initial exchange in routes/oauth.ts.
+    const params = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      client_id: process.env.GHL_CLIENT_ID,
-      client_secret: process.env.GHL_CLIENT_SECRET,
+      client_id: process.env.GHL_CLIENT_ID ?? '',
+      client_secret: process.env.GHL_CLIENT_SECRET ?? '',
+    })
+
+    const { data } = await axios.post(`${GHL_BASE}/oauth/token`, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     })
 
     const expiresAt = new Date(Date.now() + data.expires_in * 1000)
