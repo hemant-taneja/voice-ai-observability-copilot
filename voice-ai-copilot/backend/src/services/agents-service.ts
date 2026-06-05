@@ -167,8 +167,6 @@ export class AgentsService {
   }
 
   async upsertFromGHL(locationId: string, ghlAgents: Array<Record<string, unknown>>): Promise<number> {
-    const incomingIds: string[] = []
-
     for (const agent of ghlAgents) {
       const id     = (agent.id ?? agent.agentId ?? agent._id) as string
       const name   = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
@@ -182,17 +180,13 @@ export class AgentsService {
              updated_at = NOW()`,
         [locationId, id, name, script]
       )
-      incomingIds.push(id)
     }
 
-    // Remove agents no longer present in HL (cascades to kpi_configs, transcripts, analyses)
-    if (incomingIds.length > 0) {
-      await this.database.query(
-        `DELETE FROM agents WHERE location_id = $1 AND ghl_agent_id <> ALL($2::text[])`,
-        [locationId, incomingIds]
-      )
-    }
-
+    // Intentionally non-destructive: agents absent from a GHL response are NOT
+    // deleted. Absence is unreliable (pagination, scope, transient API errors),
+    // and a hard delete cascades away transcripts + analysis history. Removing an
+    // agent that was genuinely deleted in GHL should be driven by an explicit
+    // signal (e.g. an agent-deleted webhook), not by absence from a list call.
     return ghlAgents.length
   }
 
