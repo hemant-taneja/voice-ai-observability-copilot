@@ -15,7 +15,7 @@
  *   npm run simulate -- ghl-ag-2 all              # all 3 cases for Marcus
  *
  * Env vars:
- *   SIMULATE_LOCATION_ID  — target location  (default: TJkIaqSqj7jectw2dxRx)
+ *   SIMULATE_LOCATION_ID  — target location  (default: demo-location-001)
  *   SIMULATE_AGENT_ID     — default agent GHL ID (default: ghl-ag-1)
  *
  * Agents (from seed):
@@ -42,11 +42,13 @@ const DEFAULT_AGENT  = process.env.SIMULATE_AGENT_ID ?? 'ghl-ag-1'
 const BATCH_MODE     = ARG1 === 'all' || ARG2 === 'all'
 const AGENT_GHL_ID   = (ARG1 === 'all' || !ARG1) ? DEFAULT_AGENT : ARG1
 const SCENARIO_TYPE  = BATCH_MODE ? 'all' : ((ARG2 ?? 'pass') as 'pass' | 'fail' | 'partial' | 'random' | 'all')
-const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'TJkIaqSqj7jectw2dxRx'
+// Demo default. Pass SIMULATE_LOCATION_ID to target a real GHL location explicitly.
+const LOCATION_ID    = process.env.SIMULATE_LOCATION_ID ?? 'demo-location-001'
 const BATCH_DELAY_MS = 2000
 
 type Turn     = { speaker: 'agent' | 'user'; text: string; timestamp_ms: number }
-type TestCase = { label: string; outcome: 'pass' | 'fail' | 'partial'; turns: Turn[] }
+type ExecAction = { _id?: string; actionType: string; actionName: string; triggerReceivedAt?: string; executedAt?: string }
+type TestCase = { label: string; outcome: 'pass' | 'fail' | 'partial'; turns: Turn[]; executedActions?: ExecAction[] }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ghl-ag-1 | Aria — Travel Booking Specialist
@@ -92,6 +94,11 @@ const CASES: Record<string, TestCase[]> = {
         { speaker: 'agent', text: "Excellent! I'll lock in availability for March 15 to 22 for two. To hold the booking I'll need a $500 deposit. Can I take your card details now?", timestamp_ms: 38600 },
         { speaker: 'user',  text: "Yes, absolutely. Let me grab my card.", timestamp_ms: 44300 },
         { speaker: 'agent', text: "Perfect — you're going to have an incredible anniversary in Bali, Priya!", timestamp_ms: 46100 },
+      ],
+      // Both tool calls fired correctly on this winning call.
+      executedActions: [
+        { _id: 'exec-aria-book', actionType: 'APPOINTMENT_BOOKING', actionName: 'Hold Booking' },
+        { _id: 'exec-aria-sms',  actionType: 'SMS',                 actionName: 'Send Itinerary SMS' },
       ],
     },
 
@@ -305,6 +312,11 @@ const CASES: Record<string, TestCase[]> = {
         { speaker: 'agent', text: "You are all set for Monday at 11 AM! We will send a confirmation text. We look forward to seeing you, Amy — have a great day!", timestamp_ms: 26600 },
         { speaker: 'user',  text: "Thanks Sophie, see you then!", timestamp_ms: 31200 },
       ],
+      // Appointment booked, but the confirmation SMS was never fired — a missed
+      // tool call the analytics layer should flag against its triggerPrompt.
+      executedActions: [
+        { _id: 'exec-sophie-book', actionType: 'APPOINTMENT_BOOKING', actionName: 'Book Appointment' },
+      ],
     },
 
   ],
@@ -374,12 +386,14 @@ type SendResult = { agentId: string; label: string; outcome: string; callId: str
 async function sendWebhook(agentId: string, testCase: TestCase): Promise<SendResult> {
   const id      = callId()
   const payload = {
-    callId:          id,
-    locationId:      LOCATION_ID,
+    callId:              id,
+    locationId:          LOCATION_ID,
     agentId,
-    callerPhone:     `+1${Math.floor(2000000000 + Math.random() * 8000000000)}`,
-    durationSeconds: Math.round(testCase.turns[testCase.turns.length - 1].timestamp_ms / 1000) + 10,
-    turns:           testCase.turns,
+    callerPhone:         `+1${Math.floor(2000000000 + Math.random() * 8000000000)}`,
+    durationSeconds:     Math.round(testCase.turns[testCase.turns.length - 1].timestamp_ms / 1000) + 10,
+    turns:               testCase.turns,
+    createdAt:           new Date().toISOString(),
+    executedCallActions: testCase.executedActions ?? [],
   }
 
   const body      = JSON.stringify(payload)

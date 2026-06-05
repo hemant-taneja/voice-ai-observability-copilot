@@ -49,6 +49,12 @@ export class TranscriptService {
       ]
     )
 
+    const transcriptId = rows[0].id
+
+    // Persist the deterministic record of which actions (tools) fired during the
+    // call. These arrive inside the VoiceAiCallEnd webhook's executedCallActions.
+    await this.insertExecutedActions(transcriptId, payload)
+
     const kpiConfigRow = await this.database.query(
       `SELECT kc.id FROM kpi_configs kc
        JOIN agents a ON a.id = kc.agent_id
@@ -57,9 +63,31 @@ export class TranscriptService {
     )
 
     return {
-      id: rows[0].id,
+      id: transcriptId,
       kpiConfigId: kpiConfigRow.rows[0]?.id ?? null,
       isNew: true,
+    }
+  }
+
+  private async insertExecutedActions(
+    transcriptId: string,
+    payload: GHLCallCompletedPayload
+  ): Promise<void> {
+    for (const action of payload.executedCallActions ?? []) {
+      await this.database.query(
+        `INSERT INTO transcript_actions
+           (transcript_id, ghl_action_id, action_type, action_name, parameters, executed_at, trigger_received_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          transcriptId,
+          action._id ?? null,
+          action.actionType,
+          action.actionName,
+          JSON.stringify(action.actionParameters ?? {}),
+          action.executedAt ?? null,
+          action.triggerReceivedAt ?? null,
+        ]
+      )
     }
   }
 }

@@ -124,6 +124,11 @@
         <RecommendationPanel :recommendations="latestFailedKpis" />
       </section>
 
+      <!-- Action (tool-call) analytics -->
+      <section v-if="actionAnalytics.length" class="content-section">
+        <ActionAnalyticsPanel :analytics="actionAnalytics" />
+      </section>
+
       <!-- Transcript table -->
       <section class="content-section">
         <div class="section-header-row">
@@ -279,12 +284,38 @@
                   </div>
                 </div>
 
+                <!-- Action Findings (tool-call correctness) -->
+                <div v-if="selectedAnalysis?.actionFindings?.length" class="drawer-block">
+                  <h3 class="drawer-block-title">Action Findings</h3>
+                  <div class="action-findings-list">
+                    <div
+                      v-for="af in selectedAnalysis!.actionFindings"
+                      :key="af.id"
+                      class="action-finding-row"
+                      :class="`status-${af.status}`"
+                    >
+                      <div class="finding-top">
+                        <span class="finding-name">{{ af.actionName }}</span>
+                        <span class="finding-status" :class="`status-${af.status}`">{{ af.status }}</span>
+                      </div>
+                      <p class="finding-desc">{{ af.description }}</p>
+                      <p v-if="af.promptFlaw" class="finding-flaw">
+                        <span class="finding-flaw-label">Trigger prompt flaw:</span> {{ af.promptFlaw }}
+                      </p>
+                      <p v-if="af.suggestedTriggerPrompt" class="finding-suggested mono">
+                        {{ af.suggestedTriggerPrompt }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Transcript -->
                 <div class="drawer-block">
                   <h3 class="drawer-block-title">Transcript</h3>
                   <TranscriptViewer
                     :turns="drawerCard.turns"
                     :useActions="selectedAnalysis?.useActions ?? []"
+                    :actionFindings="selectedAnalysis?.actionFindings ?? []"
                   />
                 </div>
 
@@ -318,11 +349,13 @@ import { analysisApi } from '../api/analysis'
 import { kpiApi } from '../api/kpi'
 import { useStreamStore } from '../stores/stream'
 import { useReviewStore } from '../stores/review'
+import { useAnalysisStore } from '../stores/analysis'
 import type { AgentDetail } from '../types/agent.types'
 import type { KpiConfig, KpiGoal, KpiScore, TranscriptCard, AnalysisVersion, UseAction, ScriptSuggestion } from '../types/analysis.types'
 import UseActionBadge from '../components/UseActionBadge.vue'
 import KpiConfigEditor from '../components/KpiConfigEditor.vue'
 import RecommendationPanel from '../components/RecommendationPanel.vue'
+import ActionAnalyticsPanel from '../components/ActionAnalyticsPanel.vue'
 import KpiScoreBar from '../components/KpiScoreBar.vue'
 import TranscriptViewer from '../components/TranscriptViewer.vue'
 import ScriptSuggestionsPanel from '../components/ScriptSuggestionsPanel.vue'
@@ -339,6 +372,10 @@ const transcriptCards = ref<TranscriptCard[]>([])
 const kpiConfig = ref<KpiConfig | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+// Per-agent action (tool-call) analytics, sourced from the analysis store.
+const analysisStore = useAnalysisStore()
+const actionAnalytics = computed(() => analysisStore.getActionAnalytics(id))
 
 // Script editor state
 const scriptOpen = ref(false)
@@ -394,6 +431,7 @@ watch(() => streamStore.lastEvent, async (event) => {
   const [fresh, freshAgent] = await Promise.all([
     analysisApi.getByAgent(id, props.locationId),
     agentsApi.getById(id, props.locationId),
+    analysisStore.fetchActionAnalytics(id, props.locationId),
   ])
   transcriptCards.value = fresh
   agent.value = freshAgent
@@ -417,6 +455,7 @@ onMounted(async () => {
       agentsApi.getById(id, props.locationId),
       analysisApi.getByAgent(id, props.locationId),
       kpiApi.get(id, props.locationId),
+      analysisStore.fetchActionAnalytics(id, props.locationId),
     ])
 
     if (agentRes.status === 'fulfilled') {
@@ -1182,6 +1221,78 @@ function formatDuration(seconds: number | null | undefined): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* ── Action findings (drawer) ────────────────────────────── */
+.action-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-finding-row {
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+}
+
+.action-finding-row.status-correct   { border-left-color: var(--pass); }
+.action-finding-row.status-missed     { border-left-color: var(--warn); }
+.action-finding-row.status-incorrect  { border-left-color: var(--fail); }
+
+.finding-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.finding-name { font-size: 13px; font-weight: 600; color: var(--text-2); }
+
+.finding-status {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.finding-status.status-correct   { background: rgba(0,201,141,0.12);  color: var(--pass); }
+.finding-status.status-missed    { background: rgba(255,171,46,0.12); color: var(--warn); }
+.finding-status.status-incorrect { background: rgba(255,65,105,0.12); color: var(--fail); }
+
+.finding-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
+.finding-flaw {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.finding-flaw-label {
+  font-weight: 700;
+  color: var(--warn);
+}
+
+.finding-suggested {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  background: rgba(0, 201, 141, 0.06);
+  color: var(--text-2);
+  border: 1px solid rgba(0, 201, 141, 0.2);
 }
 
 .drawer-footer {

@@ -208,12 +208,14 @@ webhookRouter.post('/ghl', async (req: Request, res: Response, next: NextFunctio
         const turns = parseTranscriptToTurns(event.transcript ?? '')
 
         const adapted: GHLCallCompletedPayload = {
-          callId:          event.id,
-          locationId:      event.locationId,
-          agentId:         event.agentId,
-          callerPhone:     event.fromNumber,
-          durationSeconds: event.duration,
+          callId:              event.id,
+          locationId:          event.locationId,
+          agentId:             event.agentId,
+          callerPhone:         event.fromNumber,
+          durationSeconds:     event.duration,
           turns,
+          createdAt:           event.createdAt,
+          executedCallActions: event.executedCallActions,
         }
 
         const result = await transcriptService.ingest(adapted)

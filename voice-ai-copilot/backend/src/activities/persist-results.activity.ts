@@ -54,6 +54,35 @@ export async function persistResults(
       )
     }
 
+    for (const af of output.actionFindings ?? []) {
+      // Resolve agent_action_id from the transcript's agent + the GHL action id,
+      // so the finding links back to the synced definition when one exists.
+      await client.query(
+        `INSERT INTO action_findings
+           (analysis_id, agent_action_id, ghl_action_id, action_type, action_name,
+            transcript_turn_index, status, description, prompt_flaw, suggested_trigger_prompt)
+         VALUES (
+           $1,
+           (SELECT aa.id FROM agent_actions aa
+              JOIN transcripts t ON t.agent_id = aa.agent_id
+              WHERE t.id = $2 AND aa.ghl_action_id = $3),
+           $3, $4, $5, $6, $7, $8, $9, $10
+         )`,
+        [
+          analysisId,
+          job.transcriptId,
+          af.ghlActionId ?? null,
+          af.actionType,
+          af.actionName,
+          af.transcriptTurnIndex,
+          af.status,
+          af.description,
+          af.promptFlaw ?? null,
+          af.suggestedTriggerPrompt ?? null,
+        ]
+      )
+    }
+
     await client.query(
       `UPDATE transcripts SET status = 'analyzed' WHERE id = $1`,
       [job.transcriptId]

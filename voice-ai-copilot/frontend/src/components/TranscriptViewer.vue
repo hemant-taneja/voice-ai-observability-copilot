@@ -22,20 +22,61 @@
           <span class="action-desc">{{ ua.description }}</span>
         </div>
       </div>
+      <!-- Tool-call (Action) markers — one per agent action judged at this turn -->
+      <div
+        v-for="af in actionFindingsAt(index)"
+        :key="af.id ?? `af-${index}-${af.actionName}`"
+        class="inline-action tool-call"
+        :class="`status-${af.status}`"
+      >
+        <span class="action-icon">{{ toolIcon(af.actionType) }}</span>
+        <div class="action-body">
+          <span class="action-type">
+            {{ af.actionName }} · {{ findingStatusLabel(af.status) }}
+          </span>
+          <span class="action-desc">{{ af.description }}</span>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { TranscriptTurn, UseAction } from '../types/analysis.types'
+import type { TranscriptTurn, UseAction, ActionFinding } from '../types/analysis.types'
 
-const props = defineProps<{
-  turns: TranscriptTurn[]
-  useActions: UseAction[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    turns: TranscriptTurn[]
+    useActions: UseAction[]
+    actionFindings?: ActionFinding[]
+  }>(),
+  { actionFindings: () => [] }
+)
 
 function useActionsAt(index: number): UseAction[] {
   return props.useActions.filter((ua) => ua.transcriptTurnIndex === index)
+}
+
+function actionFindingsAt(index: number): ActionFinding[] {
+  return props.actionFindings.filter((af) => af.transcriptTurnIndex === index)
+}
+
+// Icon per GHL action type — gives the SMS / calendar / transfer cue inline.
+function toolIcon(actionType: string): string {
+  return {
+    SMS: '✉',
+    APPOINTMENT_BOOKING: '📅',
+    CALL_TRANSFER: '↗',
+    WORKFLOW_TRIGGER: '⚡',
+    DATA_EXTRACTION: '⛏',
+    IN_CALL_DATA_EXTRACTION: '⛏',
+    CUSTOM_ACTION: '◇',
+    KNOWLEDGE_BASE: '📖',
+  }[actionType] ?? '◇'
+}
+
+function findingStatusLabel(status: string): string {
+  return { correct: 'INVOKED', missed: 'MISSED', incorrect: 'INCORRECT' }[status] ?? status.toUpperCase()
 }
 
 function formatMs(ms: number): string {
@@ -161,6 +202,28 @@ function actionLabel(type: string): string {
 
 .inline-action.deviation .action-type       { color: var(--accent); }
 .inline-action.escalation_needed .action-type { color: var(--fail); }
+
+/* ── Tool-call (Action) markers — colored by finding status ── */
+.inline-action.tool-call.status-correct {
+  border-left-color: var(--pass);
+  background: rgba(0, 201, 141, 0.04);
+}
+.inline-action.tool-call.status-correct .action-icon,
+.inline-action.tool-call.status-correct .action-type { color: var(--pass); }
+
+.inline-action.tool-call.status-missed {
+  border-left-color: var(--warn);
+  background: rgba(255, 171, 46, 0.04);
+}
+.inline-action.tool-call.status-missed .action-icon,
+.inline-action.tool-call.status-missed .action-type { color: var(--warn); }
+
+.inline-action.tool-call.status-incorrect {
+  border-left-color: var(--fail);
+  background: rgba(255, 65, 105, 0.04);
+}
+.inline-action.tool-call.status-incorrect .action-icon,
+.inline-action.tool-call.status-incorrect .action-type { color: var(--fail); }
 
 .action-desc {
   font-size: 12px;

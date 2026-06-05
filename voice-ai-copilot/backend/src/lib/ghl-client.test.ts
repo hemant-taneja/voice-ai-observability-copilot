@@ -69,6 +69,40 @@ describe('GHLClient', () => {
     expect((body as URLSearchParams).get('refresh_token')).toBe('ref-xyz')
   })
 
+  it('fetches agent actions and unwraps the { actions } envelope', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: {
+        actions: [
+          {
+            id: 'act-1',
+            name: 'Send SMS Confirmation',
+            actionType: 'SMS',
+            actionParameters: { triggerPrompt: 'When the caller agrees to book' },
+          },
+        ],
+      },
+    })
+    const client = new GHLClient(mockDb as Database)
+    const actions = await client.getAgentActions('loc-123', 'ag-1')
+    expect(actions).toHaveLength(1)
+    expect(actions[0].actionType).toBe('SMS')
+    expect(actions[0].actionParameters?.triggerPrompt).toContain('book')
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining('/voice-ai/agents/ag-1/actions'),
+      expect.objectContaining({ params: { locationId: 'loc-123' } })
+    )
+  })
+
+  it('handles a bare array response for agent actions', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: [{ id: 'act-2', name: 'Book Appointment', actionType: 'APPOINTMENT_BOOKING' }],
+    })
+    const client = new GHLClient(mockDb as Database)
+    const actions = await client.getAgentActions('loc-123', 'ag-2')
+    expect(actions).toHaveLength(1)
+    expect(actions[0].actionType).toBe('APPOINTMENT_BOOKING')
+  })
+
   it('retries with refreshed token on 401', async () => {
     mockedAxios.get
       .mockRejectedValueOnce({ response: { status: 401 } })

@@ -22,6 +22,8 @@ const prompt: AnalysisPrompt = {
   agentScript: 'Qualify leads by confirming budget and need.',
   turns: [{ speaker: 'agent', text: 'Are you interested?', timestamp_ms: 0 }],
   kpiGoals: [{ name: 'Qualify Lead', description: 'Confirm budget and need', weight: 1 }],
+  actions: [],
+  executedActions: [],
 }
 
 describe('AnthropicProvider', () => {
@@ -41,6 +43,20 @@ describe('AnthropicProvider', () => {
     expect(result.overallScore).toBe(0.55)
     expect(result.passed).toBe(false)
     expect(result.useActions).toHaveLength(1)
+  })
+
+  it('parses actionFindings into AnalysisOutput', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        ...validOutput,
+        actionFindings: [
+          { ghlActionId: null, actionType: 'CALL_TRANSFER', actionName: 'Transfer to AE', transcriptTurnIndex: 2, status: 'incorrect', description: 'Transferred without qualifying', promptFlaw: 'no guard condition', suggestedTriggerPrompt: 'Only transfer after budget confirmed' },
+        ],
+      }) }],
+    })
+    const result = await provider.analyze(prompt)
+    expect(result.actionFindings).toHaveLength(1)
+    expect(result.actionFindings[0].status).toBe('incorrect')
   })
 
   it('throws on invalid JSON from Anthropic', async () => {

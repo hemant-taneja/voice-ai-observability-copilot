@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import { LLMProvider, AnalysisPrompt, AnalysisOutput } from '../../types/llm.types'
 import { KpiGoal } from '../../types/analysis.types'
+import { buildActionsSection } from './action-prompt'
 
 const outputSchema = z.object({
   overallScore: z.number().min(0).max(1),
@@ -24,6 +25,16 @@ const outputSchema = z.object({
     currentApproach: z.string(),
     suggestedScript: z.string(),
     impact: z.string(),
+  })).default([]),
+  actionFindings: z.array(z.object({
+    ghlActionId: z.string().nullable().default(null),
+    actionType: z.string(),
+    actionName: z.string(),
+    transcriptTurnIndex: z.number().int().min(0),
+    status: z.enum(['correct', 'missed', 'incorrect']),
+    description: z.string(),
+    promptFlaw: z.string().nullable().optional(),
+    suggestedTriggerPrompt: z.string().nullable().optional(),
   })).default([]),
 })
 
@@ -53,6 +64,8 @@ Scoring rules:
 - Set "passed" per KPI to true if score >= 0.7.
 - Set the top-level "passed" to true if the weighted average of KPI scores meets the success threshold.
 
+${buildActionsSection(prompt)}
+
 Return ONLY a JSON object matching this exact structure — no markdown, no explanation:
 {
   "overallScore": <weighted average 0-1>,
@@ -60,7 +73,8 @@ Return ONLY a JSON object matching this exact structure — no markdown, no expl
   "kpiScores": [{ "goal": "<name>", "score": <0-1>, "passed": <boolean>, "evidence": "<quote from transcript or clear reason>" }],
   "summary": "<2-3 sentence call summary>",
   "useActions": [{ "transcriptTurnIndex": <int>, "type": "<missed_opportunity|deviation|escalation_needed>", "description": "<what happened and why it matters>" }],
-  "scriptSuggestions": [{ "sectionTitle": "<script section name>", "issue": "<what went wrong>", "currentApproach": "<what agent said/did>", "suggestedScript": "<exact replacement text for the script>", "impact": "<which KPI this improves and why>" }]
+  "scriptSuggestions": [{ "sectionTitle": "<script section name>", "issue": "<what went wrong>", "currentApproach": "<what agent said/did>", "suggestedScript": "<exact replacement text for the script>", "impact": "<which KPI this improves and why>" }],
+  "actionFindings": [{ "ghlActionId": <string|null>, "actionType": "<action type>", "actionName": "<action name>", "transcriptTurnIndex": <int>, "status": "<correct|missed|incorrect>", "description": "<what happened with this action and why it matters>", "promptFlaw": <string|null>, "suggestedTriggerPrompt": <string|null> }]
 }
 
 Only include scriptSuggestions for failed KPIs or clear deviations. Leave the array empty if the call passed all KPIs.`

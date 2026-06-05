@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { LLMProvider, AnalysisPrompt, AnalysisOutput } from '../../types/llm.types'
 import { KpiGoal } from '../../types/analysis.types'
+import { buildActionsSection } from './action-prompt'
 
 const outputSchema = z.object({
   overallScore: z.number().min(0).max(1),
@@ -24,6 +25,16 @@ const outputSchema = z.object({
     currentApproach: z.string(),
     suggestedScript: z.string(),
     impact: z.string(),
+  })).default([]),
+  actionFindings: z.array(z.object({
+    ghlActionId: z.string().nullable().default(null),
+    actionType: z.string(),
+    actionName: z.string(),
+    transcriptTurnIndex: z.number().int().min(0),
+    status: z.enum(['correct', 'missed', 'incorrect']),
+    description: z.string(),
+    promptFlaw: z.string().nullable().optional(),
+    suggestedTriggerPrompt: z.string().nullable().optional(),
   })).default([]),
 })
 
@@ -57,7 +68,9 @@ Scoring rules:
 - Only score a KPI below 1.0 if the agent had a clear opportunity and failed to act.
 - Set "passed" per KPI to true if score >= 0.7.
 
-Return ONLY valid JSON: { "overallScore": <weighted average 0-1>, "passed": <bool>, "kpiScores": [...], "summary": "...", "useActions": [...], "scriptSuggestions": [{ "sectionTitle": "...", "issue": "...", "currentApproach": "...", "suggestedScript": "...", "impact": "..." }] }
+${buildActionsSection(prompt)}
+
+Return ONLY valid JSON: { "overallScore": <weighted average 0-1>, "passed": <bool>, "kpiScores": [...], "summary": "...", "useActions": [...], "scriptSuggestions": [{ "sectionTitle": "...", "issue": "...", "currentApproach": "...", "suggestedScript": "...", "impact": "..." }], "actionFindings": [{ "ghlActionId": <string|null>, "actionType": "...", "actionName": "...", "transcriptTurnIndex": <int>, "status": "correct|missed|incorrect", "description": "...", "promptFlaw": <string|null>, "suggestedTriggerPrompt": <string|null> }] }
 Only include scriptSuggestions for failed KPIs or clear deviations. Leave the array empty if the call passed all KPIs.`
 
     const turns = prompt.turns

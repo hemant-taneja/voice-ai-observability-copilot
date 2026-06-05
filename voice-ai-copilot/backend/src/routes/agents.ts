@@ -3,6 +3,7 @@ import { Client, Connection } from '@temporalio/client'
 import { ghlAuth } from '../middleware/ghl-auth'
 import { AgentsService } from '../services/agents-service'
 import { TranscriptService } from '../services/transcript-service'
+import { ActionsService } from '../services/actions-service'
 import { AppError } from '../middleware/error-handler'
 import { GHLClient, GHLClientError } from '../lib/ghl-client'
 import { config } from '../config'
@@ -10,6 +11,7 @@ import { config } from '../config'
 export const agentsRouter = Router()
 const agentsService = new AgentsService()
 const transcriptService = new TranscriptService()
+const actionsService = new ActionsService()
 const ghlClient = new GHLClient()
 
 let temporalClient: Client | null = null
@@ -37,7 +39,9 @@ agentsRouter.post('/sync', ghlAuth(), async (req: Request, res: Response, next: 
     const ghlAgents = await ghlClient.listAgents(locationId)
     console.log(`[agents/sync] GHL returned ${ghlAgents.length} agents for ${locationId}`, ghlAgents.map(a => ({ id: a.id, name: a.name })))
     const synced = await agentsService.upsertFromGHL(locationId, ghlAgents as unknown as Array<Record<string, unknown>>)
-    res.json({ ok: true, synced })
+    // Pull each agent's action (tool-call) definitions too. Non-fatal per agent.
+    const syncedActions = await actionsService.syncFromGHL(locationId, ghlClient)
+    res.json({ ok: true, synced, syncedActions })
   } catch (err) {
     if (err instanceof GHLClientError) {
       console.warn('[agents/sync] HighLevel sync failed', {
@@ -61,6 +65,15 @@ agentsRouter.get('/:agentId/analysis', ghlAuth(), async (req: Request, res: Resp
     const locationId = (req as any).locationId as string
     const analyses = await agentsService.getAnalyses(req.params.agentId, locationId)
     res.json(analyses)
+  } catch (err) { next(err) }
+})
+
+// GET /api/agents/:agentId/actions/analytics?locationId=...
+agentsRouter.get('/:agentId/actions/analytics', ghlAuth(), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const locationId = (req as any).locationId as string
+    const analytics = await actionsService.getAnalytics(req.params.agentId, locationId)
+    res.json(analytics)
   } catch (err) { next(err) }
 })
 
