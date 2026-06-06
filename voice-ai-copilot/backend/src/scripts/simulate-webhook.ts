@@ -324,6 +324,45 @@ const CASES: Record<string, TestCase[]> = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Special scenario — Manager transfer fired AFTER HOURS (ghl-ag-3 / Sophie)
+//
+//  Demonstrates trigger-prompt enhancement: the "Transfer to Manager" action's
+//  triggerPrompt ("When caller wants to talk to manager") has no business-hours
+//  condition, so it transfers at ~9 PM into a dead end. The time-of-day signal
+//  lives IN the dialogue (the only place the analyzer can see it), and the bad
+//  outcome (no manager available) is what makes the fire "incorrect".
+//
+//  Expected finding: status "incorrect", a promptFlaw about the missing
+//  business-hours condition, and a suggestedTriggerPrompt adding the 10AM–6PM gate.
+//
+//  Run:  npm run simulate -- manager
+//  Requires:  the act-sophie-manager action definition from 006_demo_actions.sql
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MANAGER_AGENT = 'ghl-ag-3'
+
+const MANAGER_AFTERHOURS: TestCase = {
+  label: 'AFTER-HOURS MANAGER TRANSFER — transfer fired at ~9 PM, no manager available (trigger prompt lacks a business-hours condition)',
+  outcome: 'fail',
+  turns: [
+    { speaker: 'agent', text: "Thanks for calling Bright Smile Dental, this is Sophie, the virtual assistant. How can I help you this evening?", timestamp_ms: 0 },
+    { speaker: 'user',  text: "Hi, I know it's almost nine at night, but I've been trying all day. I want to talk to your manager about a wrong charge on my last bill.", timestamp_ms: 2600 },
+    { speaker: 'agent', text: "I understand — you'd like to speak with a manager about a billing charge. Let me connect you right now.", timestamp_ms: 8200 },
+    { speaker: 'agent', text: "Please hold while I transfer you to the manager.", timestamp_ms: 11000 },
+    { speaker: 'user',  text: "Okay, thanks.", timestamp_ms: 13500 },
+    { speaker: 'agent', text: "I'm sorry, it doesn't look like anyone is available to take your call right now.", timestamp_ms: 27000 },
+    { speaker: 'user',  text: "Are you serious? I held all that time and there's nobody? This is ridiculous.", timestamp_ms: 30500 },
+    { speaker: 'agent', text: "I apologize for the inconvenience. Someone from our team will reach back out to you.", timestamp_ms: 35000 },
+    { speaker: 'user',  text: "Forget it.", timestamp_ms: 39000 },
+  ],
+  // The transfer DID fire — _id matches the act-sophie-manager definition so the
+  // analytics rollup attributes the fire (and the finding) to that action.
+  executedActions: [
+    { _id: 'act-sophie-manager', actionType: 'CALL_TRANSFER', actionName: 'Transfer to Manager' },
+  ],
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -420,6 +459,19 @@ async function sendWebhook(agentId: string, testCase: TestCase): Promise<SendRes
 }
 
 async function main() {
+  // Special scenario: after-hours manager transfer (see MANAGER_AFTERHOURS above).
+  if (ARG1 === 'manager' || ARG2 === 'manager') {
+    console.log('\nScenario: after-hours manager transfer (trigger-prompt enhancement demo)')
+    const result = await sendWebhook(MANAGER_AGENT, MANAGER_AFTERHOURS)
+    if (result.ok) {
+      console.log('\n  Watch the agent\'s Action Analytics panel — "Transfer to Manager" should show')
+      console.log('  1 incorrect fire with a suggested business-hours trigger prompt.')
+    } else {
+      console.error('\n  Make sure the backend is running (npm run dev) and migrations are applied (npm run migrate).')
+    }
+    return
+  }
+
   if (BATCH_MODE) {
     const cases = CASES[AGENT_GHL_ID] ?? []
     console.log(`\nBatch mode — ${cases.length} scenarios for agent: ${AGENT_GHL_ID}`)

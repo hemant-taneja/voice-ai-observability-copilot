@@ -11,12 +11,12 @@ export function buildActionsSection(prompt: AnalysisPrompt): string {
 
   const available = prompt.actions
     .map((a, i) =>
-      `${i + 1}. ${a.name} [${a.actionType}] — triggerPrompt: ${a.triggerPrompt ?? '(none provided)'}`
+      `${i + 1}. [id: ${a.ghlActionId ?? 'unknown'}] ${a.name} [${a.actionType}] — triggerPrompt: ${a.triggerPrompt ?? '(none provided)'}`
     )
     .join('\n')
 
   const fired = prompt.executedActions.length
-    ? prompt.executedActions.map((a) => `- ${a.actionName} [${a.actionType}]`).join('\n')
+    ? prompt.executedActions.map((a) => `- [id: ${a.ghlActionId ?? 'unknown'}] ${a.actionName} [${a.actionType}]`).join('\n')
     : '(no actions fired during this call)'
 
   return `Agent Actions — tools the agent can invoke mid-call. Each has a triggerPrompt describing WHEN it should fire:
@@ -32,5 +32,6 @@ Action evaluation rules:
 - status "correct": the action fired appropriately when its trigger condition arose.
 - Only emit a finding when it is noteworthy: always emit "missed" and "incorrect"; emit "correct" only for actions that genuinely fired and were appropriate. Do NOT emit findings for actions whose trigger condition simply never arose.
 - For "missed" and "incorrect", set "promptFlaw" to the specific flaw in THAT action's triggerPrompt that explains the failure (ambiguous wording, missing condition, conflicting instruction), and "suggestedTriggerPrompt" to an improved triggerPrompt that would fix it.
-- Set "transcriptTurnIndex" to the most relevant transcript turn, and "actionName"/"actionType" to identify the action.`
+- Set "transcriptTurnIndex" to the most relevant transcript turn, and "actionName"/"actionType" to identify the action.
+- Set "ghlActionId" to the bracketed "id" shown for that action above, copied verbatim, so the finding links back to its definition. Use null only when the id shown is literally "unknown".`
 }

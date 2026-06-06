@@ -32,7 +32,13 @@ FROM (VALUES
    $j$You're all set for that time.$j$),
   ('ghl-ag-3', 'act-sophie-sms', 'SMS', 'Send Confirmation SMS',
    $j$After booking, send an appointment confirmation SMS.$j$,
-   $j$I've sent you a confirmation text.$j$)
+   $j$I've sent you a confirmation text.$j$),
+  -- Deliberately under-specified triggerPrompt (no business-hours / availability
+  -- condition) so the action-analytics LLM can diagnose the flaw and suggest the
+  -- 10AM–6PM enhancement on the after-hours simulation call.
+  ('ghl-ag-3', 'act-sophie-manager', 'CALL_TRANSFER', 'Transfer to Manager',
+   $j$When caller wants to talk to manager$j$,
+   $j$Let me connect you with the manager.$j$)
 ) AS v(ghl_agent_id, ghl_action_id, action_type, name, trigger_prompt, trigger_message)
 JOIN agents a ON a.location_id = 'demo-location-001' AND a.ghl_agent_id = v.ghl_agent_id
 ON CONFLICT (agent_id, ghl_action_id) DO NOTHING;

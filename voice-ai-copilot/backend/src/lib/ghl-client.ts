@@ -97,17 +97,20 @@ export class GHLClient {
     return data.agents ?? []
   }
 
-  // Fetch the action (tool-call) definitions bound to an agent. The response
-  // shape varies slightly across GHL versions, so accept the common envelopes
-  // ({ actions }, { data }) or a bare array.
+  // Fetch the action (tool-call) definitions bound to an agent.
+  //
+  // GHL has NO "list actions for an agent" endpoint — the single-agent detail
+  // (GET /voice-ai/agents/:id) embeds an `actions` array with the full
+  // actionParameters. So we read the agent detail and pull actions out of it.
+  // The detail is returned either as { agent: {...} } or as the bare agent
+  // object, so check both.
   async getAgentActions(locationId: string, ghlAgentId: string): Promise<GHLAction[]> {
-    const data = await this.get<{ actions?: GHLAction[]; data?: GHLAction[] } | GHLAction[]>(
-      `/voice-ai/agents/${ghlAgentId}/actions`,
+    const data = await this.get<{ agent?: { actions?: GHLAction[] }; actions?: GHLAction[] }>(
+      `/voice-ai/agents/${ghlAgentId}`,
       locationId,
       false,
       { locationId }
     )
-    if (Array.isArray(data)) return data
-    return data.actions ?? data.data ?? []
+    return data.agent?.actions ?? data.actions ?? []
   }
 }

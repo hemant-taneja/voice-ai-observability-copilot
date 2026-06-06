@@ -1,53 +1,73 @@
-import OpenAI from 'openai'
-import { z } from 'zod'
-import { LLMProvider, AnalysisPrompt, AnalysisOutput } from '../../types/llm.types'
-import { KpiGoal } from '../../types/analysis.types'
-import { buildActionsSection } from './action-prompt'
+import OpenAI from "openai";
+import { z } from "zod";
+import {
+  LLMProvider,
+  AnalysisPrompt,
+  AnalysisOutput,
+} from "../../types/llm.types";
+import { KpiGoal } from "../../types/analysis.types";
+import { buildActionsSection } from "./action-prompt";
 
 const outputSchema = z.object({
   overallScore: z.number().min(0).max(1),
   passed: z.boolean(),
-  kpiScores: z.array(z.object({
-    goal: z.string(),
-    score: z.number().min(0).max(1),
-    passed: z.boolean(),
-    evidence: z.string(),
-  })),
+  kpiScores: z.array(
+    z.object({
+      goal: z.string(),
+      score: z.number().min(0).max(1),
+      passed: z.boolean(),
+      evidence: z.string(),
+    }),
+  ),
   summary: z.string(),
-  useActions: z.array(z.object({
-    transcriptTurnIndex: z.number().int().min(0),
-    type: z.enum(['missed_opportunity', 'deviation', 'escalation_needed']),
-    description: z.string(),
-  })),
-  scriptSuggestions: z.array(z.object({
-    sectionTitle: z.string(),
-    issue: z.string(),
-    currentApproach: z.string(),
-    suggestedScript: z.string(),
-    impact: z.string(),
-  })).default([]),
-  actionFindings: z.array(z.object({
-    ghlActionId: z.string().nullable().default(null),
-    actionType: z.string(),
-    actionName: z.string(),
-    transcriptTurnIndex: z.number().int().min(0),
-    status: z.enum(['correct', 'missed', 'incorrect']),
-    description: z.string(),
-    promptFlaw: z.string().nullable().optional(),
-    suggestedTriggerPrompt: z.string().nullable().optional(),
-  })).default([]),
-})
+  useActions: z.array(
+    z.object({
+      transcriptTurnIndex: z.number().int().min(0),
+      type: z.enum(["missed_opportunity", "deviation", "escalation_needed"]),
+      description: z.string(),
+    }),
+  ),
+  scriptSuggestions: z
+    .array(
+      z.object({
+        sectionTitle: z.string(),
+        issue: z.string(),
+        currentApproach: z.string(),
+        suggestedScript: z.string(),
+        impact: z.string(),
+      }),
+    )
+    .default([]),
+  actionFindings: z
+    .array(
+      z.object({
+        ghlActionId: z.string().nullable().default(null),
+        actionType: z.string(),
+        actionName: z.string(),
+        transcriptTurnIndex: z.number().int().min(0),
+        status: z.enum(["correct", "missed", "incorrect"]),
+        description: z.string(),
+        promptFlaw: z.string().nullable().optional(),
+        suggestedTriggerPrompt: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
+});
 
-const kpiGoalSchema = z.array(z.object({
-  name: z.string(),
-  description: z.string(),
-  weight: z.number().min(0).max(1),
-}))
+const kpiGoalSchema = z.array(
+  z.object({
+    name: z.string(),
+    description: z.string(),
+    weight: z.number().min(0).max(1),
+  }),
+);
 
 function buildSystemPrompt(prompt: AnalysisPrompt): string {
   const goals = prompt.kpiGoals
-    .map((g, i) => `${i + 1}. ${g.name} (weight: ${g.weight}): ${g.description}`)
-    .join('\n')
+    .map(
+      (g, i) => `${i + 1}. ${g.name} (weight: ${g.weight}): ${g.description}`,
+    )
+    .join("\n");
 
   return `You are a Voice AI call quality analyst. Evaluate the following call transcript against the agent's KPIs.
 
@@ -77,67 +97,69 @@ Return ONLY a JSON object matching this exact structure — no markdown, no expl
   "actionFindings": [{ "ghlActionId": <string|null>, "actionType": "<action type>", "actionName": "<action name>", "transcriptTurnIndex": <int>, "status": "<correct|missed|incorrect>", "description": "<what happened with this action and why it matters>", "promptFlaw": <string|null>, "suggestedTriggerPrompt": <string|null> }]
 }
 
-Only include scriptSuggestions for failed KPIs or clear deviations. Leave the array empty if the call passed all KPIs.`
+Only include scriptSuggestions for failed KPIs or clear deviations. Leave the array empty if the call passed all KPIs.`;
 }
 
 function buildUserPrompt(prompt: AnalysisPrompt): string {
   const turns = prompt.turns
     .map((t, i) => `[${i}] ${t.speaker.toUpperCase()}: ${t.text}`)
-    .join('\n')
-  return `Transcript:\n${turns}`
+    .join("\n");
+  return `Transcript:\n${turns}`;
 }
 
 interface OpenAIProviderOptions {
-  apiKey?: string
-  baseURL?: string
-  model?: string
-  providerName?: string
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+  providerName?: string;
 }
 
 export class OpenAIProvider implements LLMProvider {
-  readonly providerName: string
-  readonly modelName: string
+  readonly providerName: string;
+  readonly modelName: string;
 
-  private client: OpenAI
+  private client: OpenAI;
 
   constructor(options: OpenAIProviderOptions = {}) {
-    this.providerName = options.providerName ?? 'openai'
-    this.modelName = options.model ?? 'gpt-4o'
+    this.providerName = options.providerName ?? "openai";
+    this.modelName = options.model ?? "gpt-4o";
     this.client = new OpenAI({
       apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
       baseURL: options.baseURL,
-    })
+    });
   }
 
   async analyze(prompt: AnalysisPrompt): Promise<AnalysisOutput> {
     const response = await this.client.chat.completions.create({
       model: this.modelName,
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       messages: [
-        { role: 'system', content: buildSystemPrompt(prompt) },
-        { role: 'user', content: buildUserPrompt(prompt) },
+        { role: "system", content: buildSystemPrompt(prompt) },
+        { role: "user", content: buildUserPrompt(prompt) },
       ],
-      temperature: 0.2,
-    })
+      temperature: 0.1,
+    });
 
-    const raw = response.choices[0]?.message?.content
-    if (!raw) throw new Error('OpenAI returned empty content')
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error("OpenAI returned empty content");
 
-    const parsed = outputSchema.safeParse(JSON.parse(raw))
+    const parsed = outputSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) {
-      throw new Error(`LLM output failed validation: ${parsed.error.toString()}`)
+      throw new Error(
+        `LLM output failed validation: ${parsed.error.toString()}`,
+      );
     }
 
-    return parsed.data
+    return parsed.data;
   }
 
   async suggestKpiGoals(script: string): Promise<KpiGoal[]> {
     const response = await this.client.chat.completions.create({
       model: this.modelName,
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: `You are an expert at defining measurable KPI goals for AI voice agents.
 Given the agent's script or instructions, derive 2-5 specific, measurable KPI goals.
 Each goal must be something an evaluator can clearly determine from a call transcript.
@@ -146,21 +168,23 @@ Weights must sum to 1.0.
 Return ONLY a JSON object: { "goals": [{ "name": "<concise goal name>", "description": "<what success looks like — be specific and observable>", "weight": <0.1-0.7> }] }`,
         },
         {
-          role: 'user',
+          role: "user",
           content: `Agent script:\n${script}`,
         },
       ],
       temperature: 0.3,
-    })
+    });
 
-    const raw = response.choices[0]?.message?.content
-    if (!raw) throw new Error('OpenAI returned empty content')
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error("OpenAI returned empty content");
 
-    const parsed = kpiGoalSchema.safeParse(JSON.parse(raw).goals)
+    const parsed = kpiGoalSchema.safeParse(JSON.parse(raw).goals);
     if (!parsed.success) {
-      throw new Error(`KPI suggestion output failed validation: ${parsed.error.toString()}`)
+      throw new Error(
+        `KPI suggestion output failed validation: ${parsed.error.toString()}`,
+      );
     }
 
-    return parsed.data
+    return parsed.data;
   }
 }

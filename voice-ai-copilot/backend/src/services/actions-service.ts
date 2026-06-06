@@ -1,5 +1,5 @@
 import { db as defaultDb, Database } from '../db/index'
-import { GHLClient } from '../lib/ghl-client'
+import { GHLClient, GHLClientError } from '../lib/ghl-client'
 import { GHLAction } from '../types/ghl.types'
 
 export interface ActionAnalytics {
@@ -67,7 +67,9 @@ export class ActionsService {
         console.warn('[actions/sync] failed to sync actions', {
           locationId,
           agentId: row.ghl_agent_id,
-          endpoint: `/voice-ai/agents/${row.ghl_agent_id}/actions`,
+          endpoint: `/voice-ai/agents/${row.ghl_agent_id}`,
+          status: err instanceof GHLClientError ? err.upstreamStatus : undefined,
+          upstream: err instanceof GHLClientError ? err.upstreamMessage : undefined,
           error: (err as Error).message,
         })
       }
