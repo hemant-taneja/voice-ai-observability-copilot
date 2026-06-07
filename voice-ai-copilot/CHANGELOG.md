@@ -23,4 +23,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - analysis.failed SSE events now trigger a data refresh so the failed status pill appears without a page reload
 
 ### Fixed
+- Voice AI call transcripts now parse correctly — GHL's `VoiceAiCallEnd` webhook uses lowercase `bot:`/`human:` speaker labels, which the parser didn't recognize, so every real call collapsed into a single unusable agent turn instead of alternating speaker turns
+- Webhook handler no longer silently skips analysis — when a transcript is ingested but the workflow isn't started, it now logs the reason (duplicate call vs. agent missing a KPI config) instead of leaving the call stranded at `pending` with no explanation
 - Migration runner now applies every `*.sql` file in `db/migrations` in order, instead of a hardcoded `001`/`002` list, so new migrations (e.g. the action-analytics schema) are actually created on deploy rather than being silently skipped
+
+### Changed
+- Webhook and transcript ingestion now log the incoming `VoiceAiCallEnd` transcript shape and `executedCallActions` so action persistence can be diagnosed against deployed GHL traffic

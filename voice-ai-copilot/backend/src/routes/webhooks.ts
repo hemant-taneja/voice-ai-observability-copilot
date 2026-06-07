@@ -55,15 +55,17 @@ function verifyEd25519(rawBody: Buffer, signature: string | undefined): boolean 
 
 // Parse a GHL VoiceAiCallEnd transcript string into structured turns.
 // GHL format: "AI Agent: <text>\nCaller: <text>\n..."
-function parseTranscriptToTurns(
+export function parseTranscriptToTurns(
   transcript: string
 ): Array<{ speaker: 'agent' | 'user'; text: string; timestamp_ms: number }> {
   const lines = transcript.split('\n').filter(l => l.trim())
   const turns: Array<{ speaker: 'agent' | 'user'; text: string; timestamp_ms: number }> = []
 
   for (const line of lines) {
-    const agentMatch = line.match(/^(?:AI Agent|Agent):\s*(.+)/i)
-    const userMatch  = line.match(/^(?:Caller|User|Customer):\s*(.+)/i)
+    // GHL Voice AI uses "bot:" / "human:" (lowercase, no space). Keep the older
+    // labels too so simulated/seeded transcripts still parse.
+    const agentMatch = line.match(/^(?:AI Agent|Agent|Assistant|Bot|AI):\s*(.+)/i)
+    const userMatch  = line.match(/^(?:Caller|User|Customer|Human|Lead|Contact):\s*(.+)/i)
 
     if (agentMatch) {
       turns.push({ speaker: 'agent', text: agentMatch[1].trim(), timestamp_ms: 0 })
@@ -205,6 +207,18 @@ webhookRouter.post('/ghl', async (req: Request, res: Response, next: NextFunctio
 
       case 'VoiceAiCallEnd': {
         const event = payload as unknown as VoiceAiCallEndPayload
+        // TEMP DIAGNOSTIC: log the raw GHL transcript so we can see its true
+        // shape/speaker labels (it is not persisted in raw_payload). Remove once
+        // parseTranscriptToTurns is confirmed correct.
+        console.log('[webhook/ghl] VoiceAiCallEnd received', {
+          callId: event.id,
+          transcriptType: typeof event.transcript,
+          transcriptSample: JSON.stringify(event.transcript)?.slice(0, 2000),
+          executedCallActionsCount: Array.isArray(event.executedCallActions)
+            ? event.executedCallActions.length
+            : 0,
+          executedCallActions: JSON.stringify(event.executedCallActions)?.slice(0, 2000),
+        })
         const turns = parseTranscriptToTurns(event.transcript ?? '')
 
         const adapted: GHLCallCompletedPayload = {
@@ -231,6 +245,17 @@ webhookRouter.post('/ghl', async (req: Request, res: Response, next: NextFunctio
               locationId:   event.locationId,
               kpiConfigId:  result.kpiConfigId,
             }],
+          })
+        } else {
+          // Transcript was ingested but analysis was NOT started. Make the reason
+          // visible instead of silently leaving the row at status='pending'.
+          console.warn('[webhook/ghl] VoiceAiCallEnd ingested but analysis skipped', {
+            transcriptId: result.id,
+            isNew: result.isNew,
+            hasKpiConfig: Boolean(result.kpiConfigId),
+            agentId: event.agentId,
+            locationId: event.locationId,
+            reason: !result.isNew ? 'duplicate call' : 'no KPI config for agent',
           })
         }
         break

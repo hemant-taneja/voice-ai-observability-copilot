@@ -73,7 +73,13 @@ export class TranscriptService {
     transcriptId: string,
     payload: GHLCallCompletedPayload
   ): Promise<void> {
-    for (const action of payload.executedCallActions ?? []) {
+    const actions = payload.executedCallActions ?? []
+    console.log('[transcript-service] persisting executed actions', {
+      transcriptId,
+      count: actions.length,
+      types: actions.map(a => a.actionType),
+    })
+    for (const action of actions) {
       await this.database.query(
         `INSERT INTO transcript_actions
            (transcript_id, ghl_action_id, action_type, action_name, parameters, executed_at, trigger_received_at)
