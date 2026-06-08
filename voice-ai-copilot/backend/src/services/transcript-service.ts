@@ -86,7 +86,10 @@ export class TranscriptService {
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           transcriptId,
-          action._id ?? null,
+          // GHL's live webhook uses "actionId"; "_id" is the documented/legacy
+          // name. This id must equal agent_actions.ghl_action_id so findings and
+          // the analytics fireCount can link back to the synced definition.
+          action.actionId ?? action._id ?? null,
           action.actionType,
           action.actionName,
           JSON.stringify(action.actionParameters ?? {}),

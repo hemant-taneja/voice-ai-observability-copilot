@@ -26,6 +26,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Voice AI call transcripts now parse correctly — GHL's `VoiceAiCallEnd` webhook uses lowercase `bot:`/`human:` speaker labels, which the parser didn't recognize, so every real call collapsed into a single unusable agent turn instead of alternating speaker turns
 - Webhook handler no longer silently skips analysis — when a transcript is ingested but the workflow isn't started, it now logs the reason (duplicate call vs. agent missing a KPI config) instead of leaving the call stranded at `pending` with no explanation
 - Migration runner now applies every `*.sql` file in `db/migrations` in order, instead of a hardcoded `001`/`002` list, so new migrations (e.g. the action-analytics schema) are actually created on deploy rather than being silently skipped
+- Executed actions now persist their GHL id — the live `VoiceAiCallEnd` webhook sends the action id as `actionId` (not the documented `_id`), so every fired tool-call was stored with a NULL id; this broke the analytics fire-count join and fed the analyzer an `[id: unknown]` action list, causing a correctly-fired transfer to be flagged `incorrect`/`missed`
+- Action findings now link back to their synced definition by id or by action type+name (and the analyzer's occasional `[id: ...]` wrapper is stripped), so a finding no longer ends up orphaned with a NULL `agent_action_id`
+- A fired action can no longer be labelled `missed`: the persist step coerces such a verdict to `incorrect`, since `executedCallActions` is ground truth that the tool ran
 
 ### Changed
 - Webhook and transcript ingestion now log the incoming `VoiceAiCallEnd` transcript shape and `executedCallActions` so action persistence can be diagnosed against deployed GHL traffic
+- Action analyzer now judges the agent's *decision* to invoke a tool against its `triggerPrompt`, not the tool's external outcome — a call transfer that fired correctly but failed to connect is `correct`, not a `triggerPrompt` flaw, so telephony failures no longer generate bogus prompt-rewrite suggestions

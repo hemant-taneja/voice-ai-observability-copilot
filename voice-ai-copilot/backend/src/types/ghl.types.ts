@@ -33,6 +33,9 @@ export interface GHLAction {
 // A single action INVOCATION recorded during a call — arrives inside the
 // VoiceAiCallEnd webhook payload's executedCallActions[] array.
 export interface GHLExecutedAction {
+  // GHL's live webhook sends "actionId"; some docs/older payloads use "_id".
+  // Read actionId first and fall back to _id (see TranscriptService).
+  actionId?: string
   _id?: string
   actionType: GHLActionType
   actionName: string
