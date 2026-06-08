@@ -33,6 +33,9 @@ vi.mock('../api/analysis', () => ({
 vi.mock('../api/kpi', () => ({
   kpiApi: { get: vi.fn().mockResolvedValue({ id: 'k1', agentId: 'ag-1', goals: [], successThreshold: 0.7, updatedAt: '' }) },
 }))
+vi.mock('../api/actions', () => ({
+  actionsApi: { getAnalytics: vi.fn().mockResolvedValue([]) },
+}))
 
 const router = createRouter({
   history: createWebHistory(),

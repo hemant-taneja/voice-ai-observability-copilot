@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { analysisApi } from '../api/analysis'
+import { actionsApi } from '../api/actions'
 import { kpiApi } from '../api/kpi'
-import { TranscriptCard, KpiConfig, KpiGoal } from '../types/analysis.types'
+import { TranscriptCard, KpiConfig, KpiGoal, ActionAnalytics } from '../types/analysis.types'
 
 export const useAnalysisStore = defineStore('analysis', () => {
   const cardsByAgent = ref<Record<string, TranscriptCard[]>>({})
   const kpiConfigs = ref<Record<string, KpiConfig>>({})
+  const actionAnalyticsByAgent = ref<Record<string, ActionAnalytics[]>>({})
   const loading = ref(false)
 
   async function fetchResults(agentId: string, locationId: string): Promise<void> {
@@ -16,6 +18,14 @@ export const useAnalysisStore = defineStore('analysis', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function fetchActionAnalytics(agentId: string, locationId: string): Promise<void> {
+    actionAnalyticsByAgent.value[agentId] = await actionsApi.getAnalytics(agentId, locationId)
+  }
+
+  function getActionAnalytics(agentId: string): ActionAnalytics[] {
+    return actionAnalyticsByAgent.value[agentId] ?? []
   }
 
   async function fetchKpiConfig(agentId: string, locationId: string): Promise<void> {
@@ -38,8 +48,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   return {
-    cardsByAgent, kpiConfigs, loading,
-    fetchResults, fetchKpiConfig, saveKpiConfig,
-    getCards,
+    cardsByAgent, kpiConfigs, actionAnalyticsByAgent, loading,
+    fetchResults, fetchActionAnalytics, fetchKpiConfig, saveKpiConfig,
+    getCards, getActionAnalytics,
   }
 })

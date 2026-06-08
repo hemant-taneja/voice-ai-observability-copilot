@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { db as defaultDb, Database } from '../db/index'
-import { GHLAgent } from '../types/ghl.types'
+import { GHLAgent, GHLAction } from '../types/ghl.types'
 
 const GHL_BASE = 'https://services.leadconnectorhq.com'
 
@@ -95,5 +95,22 @@ export class GHLClient {
       { locationId }
     )
     return data.agents ?? []
+  }
+
+  // Fetch the action (tool-call) definitions bound to an agent.
+  //
+  // GHL has NO "list actions for an agent" endpoint — the single-agent detail
+  // (GET /voice-ai/agents/:id) embeds an `actions` array with the full
+  // actionParameters. So we read the agent detail and pull actions out of it.
+  // The detail is returned either as { agent: {...} } or as the bare agent
+  // object, so check both.
+  async getAgentActions(locationId: string, ghlAgentId: string): Promise<GHLAction[]> {
+    const data = await this.get<{ agent?: { actions?: GHLAction[] }; actions?: GHLAction[] }>(
+      `/voice-ai/agents/${ghlAgentId}`,
+      locationId,
+      false,
+      { locationId }
+    )
+    return data.agent?.actions ?? data.actions ?? []
   }
 }

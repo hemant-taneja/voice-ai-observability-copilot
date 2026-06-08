@@ -84,3 +84,44 @@ describe('POST /webhooks/call-completed', () => {
     expect(res.body.received).toBe(true)
   })
 })
+
+describe('parseTranscriptToTurns', () => {
+  // Real GHL VoiceAiCallEnd transcript uses lowercase "bot:"/"human:" labels
+  // with no space after the colon. Captured from call 6a25186f17a921dd841b287b.
+  const ghlTranscript = [
+    'bot:Hey, you have reached Hemant. How can I help you today?',
+    'human:Hi.',
+    'bot:Are you still',
+    "human:Can you I guess Yeah. Yeah. I'm here. Can you help me with the sales",
+    'bot:Sure, I can help you with that. What is your name, email address, and phone number?',
+    'human:So my name is Eman.',
+    'bot:Got it.',
+    'human:Yeah.',
+    'human:Uh, also, can you help me connect with the managers?',
+    'bot:Please wait I will transfer the call',
+    'human:No.',
+    'bot:Alright. Thank you for calling',
+  ].join('\n')
+
+  it('parses GHL bot:/human: labels into alternating speaker turns', async () => {
+    const { parseTranscriptToTurns } = await import('./webhooks')
+    const turns = parseTranscriptToTurns(ghlTranscript)
+
+    expect(turns).toHaveLength(12)
+    expect(turns.filter(t => t.speaker === 'agent')).toHaveLength(6)
+    expect(turns.filter(t => t.speaker === 'user')).toHaveLength(6)
+    expect(turns[0]).toEqual({ speaker: 'agent', text: 'Hey, you have reached Hemant. How can I help you today?', timestamp_ms: 0 })
+    expect(turns[1]).toEqual({ speaker: 'user', text: 'Hi.', timestamp_ms: 0 })
+    // Must NOT collapse everything into a single fallback turn
+    expect(turns.length).toBeGreaterThan(1)
+  })
+
+  it('still parses the legacy "AI Agent:"/"Caller:" labels', async () => {
+    const { parseTranscriptToTurns } = await import('./webhooks')
+    const turns = parseTranscriptToTurns('AI Agent: Hello there\nCaller: Hi, I need help')
+    expect(turns).toEqual([
+      { speaker: 'agent', text: 'Hello there', timestamp_ms: 0 },
+      { speaker: 'user', text: 'Hi, I need help', timestamp_ms: 0 },
+    ])
+  })
+})

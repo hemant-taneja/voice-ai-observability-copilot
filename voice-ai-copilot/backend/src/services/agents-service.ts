@@ -81,6 +81,19 @@ export class AgentsService {
          t.duration_seconds,
          t.ingested_at,
          t.turns,
+         (
+           SELECT COALESCE(json_agg(
+             json_build_object(
+               'id',                ta.id,
+               'ghlActionId',       ta.ghl_action_id,
+               'actionType',        ta.action_type,
+               'actionName',        ta.action_name,
+               'executedAt',        ta.executed_at,
+               'triggerReceivedAt', ta.trigger_received_at
+             ) ORDER BY ta.trigger_received_at NULLS LAST
+           ), '[]'::json)
+           FROM transcript_actions ta WHERE ta.transcript_id = t.id
+         ) AS transcript_actions,
          COALESCE(
            json_agg(
              json_build_object(
@@ -101,6 +114,22 @@ export class AgentsService {
                    )
                  ), '[]'::json)
                  FROM use_actions ua WHERE ua.analysis_id = ar.id
+               ),
+               'actionFindings', (
+                 SELECT COALESCE(json_agg(
+                   json_build_object(
+                     'id',                     af.id,
+                     'ghlActionId',            af.ghl_action_id,
+                     'actionType',             af.action_type,
+                     'actionName',             af.action_name,
+                     'transcriptTurnIndex',    af.transcript_turn_index,
+                     'status',                 af.status,
+                     'description',            af.description,
+                     'promptFlaw',             af.prompt_flaw,
+                     'suggestedTriggerPrompt', af.suggested_trigger_prompt
+                   )
+                 ), '[]'::json)
+                 FROM action_findings af WHERE af.analysis_id = ar.id
                )
              ) ORDER BY ar.analyzed_at DESC
            ) FILTER (WHERE ar.id IS NOT NULL),
@@ -122,6 +151,7 @@ export class AgentsService {
       durationSeconds: row.duration_seconds ?? null,
       ingestedAt: row.ingested_at,
       turns: row.turns ?? [],
+      transcriptActions: row.transcript_actions ?? [],
       analyses: (row.analyses ?? []).map((a: any) => ({
         id: a.id,
         overallScore: a.overallScore != null ? parseFloat(a.overallScore) : null,
@@ -131,6 +161,7 @@ export class AgentsService {
         analyzedAt: a.analyzedAt,
         scriptSuggestions: a.scriptSuggestions ?? [],
         useActions: a.useActions ?? [],
+        actionFindings: a.actionFindings ?? [],
       })),
     }))
   }
@@ -167,8 +198,6 @@ export class AgentsService {
   }
 
   async upsertFromGHL(locationId: string, ghlAgents: Array<Record<string, unknown>>): Promise<number> {
-    const incomingIds: string[] = []
-
     for (const agent of ghlAgents) {
       const id     = (agent.id ?? agent.agentId ?? agent._id) as string
       const name   = (agent.name ?? agent.agentName ?? agent.title ?? agent.label ?? 'Unnamed Agent') as string
@@ -182,17 +211,13 @@ export class AgentsService {
              updated_at = NOW()`,
         [locationId, id, name, script]
       )
-      incomingIds.push(id)
     }
 
-    // Remove agents no longer present in HL (cascades to kpi_configs, transcripts, analyses)
-    if (incomingIds.length > 0) {
-      await this.database.query(
-        `DELETE FROM agents WHERE location_id = $1 AND ghl_agent_id <> ALL($2::text[])`,
-        [locationId, incomingIds]
-      )
-    }
-
+    // Intentionally non-destructive: agents absent from a GHL response are NOT
+    // deleted. Absence is unreliable (pagination, scope, transient API errors),
+    // and a hard delete cascades away transcripts + analysis history. Removing an
+    // agent that was genuinely deleted in GHL should be driven by an explicit
+    // signal (e.g. an agent-deleted webhook), not by absence from a list call.
     return ghlAgents.length
   }
 

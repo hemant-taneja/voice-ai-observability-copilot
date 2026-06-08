@@ -31,6 +31,12 @@ const prompt: AnalysisPrompt = {
     { speaker: 'user', text: 'Yes, works for me.', timestamp_ms: 4000 },
   ],
   kpiGoals: [{ name: 'Book Appointment', description: 'Secure a confirmed booking', weight: 1 }],
+  actions: [
+    { ghlActionId: 'act-1', name: 'Book Appointment', actionType: 'APPOINTMENT_BOOKING', triggerPrompt: 'When the caller picks a slot', triggerMessage: null },
+  ],
+  executedActions: [
+    { ghlActionId: 'act-1', actionType: 'APPOINTMENT_BOOKING', actionName: 'Book Appointment' },
+  ],
 }
 
 describe('OpenAIProvider', () => {
@@ -50,6 +56,25 @@ describe('OpenAIProvider', () => {
     expect(result.overallScore).toBe(0.82)
     expect(result.passed).toBe(true)
     expect(result.kpiScores).toHaveLength(1)
+  })
+
+  it('parses actionFindings and defaults them to [] when omitted', async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        ...validOutput,
+        actionFindings: [
+          { ghlActionId: 'act-1', actionType: 'SMS', actionName: 'Send Confirmation SMS', transcriptTurnIndex: 4, status: 'missed', description: 'SMS never sent', promptFlaw: 'trigger too vague', suggestedTriggerPrompt: 'Send after booking and confirm number' },
+        ],
+      }) } }],
+    })
+    const result = await provider.analyze(prompt)
+    expect(result.actionFindings).toHaveLength(1)
+    expect(result.actionFindings[0].status).toBe('missed')
+
+    // Omitted → schema default
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: JSON.stringify(validOutput) } }] })
+    const bare = await provider.analyze(prompt)
+    expect(bare.actionFindings).toEqual([])
   })
 
   it('throws when LLM returns invalid JSON', async () => {
